@@ -1,0 +1,3 @@
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
+  io.github.orangewest.trans.spring.cfg.EasyTransAutoConfiguration
+
