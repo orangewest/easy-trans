@@ -2,6 +2,7 @@ package io.github.orangewest.trans.core;
 
 import io.github.orangewest.trans.repository.TransRepository;
 
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.util.List;
 
@@ -27,6 +28,8 @@ public class TransFieldMeta {
      */
     private final String key;
 
+    private final Annotation transAnno;
+
     /**
      * 翻译仓库
      */
@@ -37,12 +40,13 @@ public class TransFieldMeta {
      */
     private List<TransFieldMeta> children;
 
-    public TransFieldMeta(Field field, Field transField, String key, Class<? extends TransRepository> repository) {
+    public TransFieldMeta(Field field, Field transField, String key, Class<? extends TransRepository> repository, Annotation transAnno) {
         this.field = field;
         this.transField = transField;
         this.trans = transField.getName();
         this.key = key;
         this.repository = repository;
+        this.transAnno = transAnno;
     }
 
     public String getTrans() {
@@ -71,6 +75,10 @@ public class TransFieldMeta {
 
     public void setChildren(List<TransFieldMeta> children) {
         this.children = children;
+    }
+
+    public Annotation getTransAnno() {
+        return transAnno;
     }
 
 }

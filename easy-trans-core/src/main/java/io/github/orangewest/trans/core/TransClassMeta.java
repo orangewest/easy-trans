@@ -60,6 +60,7 @@ public class TransClassMeta implements Serializable {
             String trans = null;
             String key = null;
             Class<? extends TransRepository> repository = null;
+            Annotation transAnnotation = transAnno;
             if (transAnno == null) {
                 Annotation[] annotations = field.getDeclaredAnnotations();
                 for (Annotation annotation : annotations) {
@@ -67,8 +68,9 @@ public class TransClassMeta implements Serializable {
                     transAnno = annotationType.getAnnotation(Trans.class);
                     if (transAnno != null) {
                         repository = transAnno.using();
-                        trans = (String) ReflectUtils.invokeAnnotation(annotationType, annotation, "trans");
-                        key = (String) ReflectUtils.invokeAnnotation(annotationType, annotation, "key");
+                        trans = StringUtils.isNotEmpty(transAnno.trans()) ? transAnno.trans() : (String) ReflectUtils.invokeAnnotation(annotationType, annotation, "trans");
+                        key = StringUtils.isNotEmpty(transAnno.key()) ? transAnno.key() : (String) ReflectUtils.invokeAnnotation(annotationType, annotation, "key");
+                        transAnnotation = annotation;
                         break;
                     }
                 }
@@ -86,7 +88,7 @@ public class TransClassMeta implements Serializable {
             if (StringUtils.isEmpty(key)) {
                 key = field.getName();
             }
-            transFieldMetas.add(new TransFieldMeta(field, fieldNameMap.get(trans), key, repository));
+            transFieldMetas.add(new TransFieldMeta(field, fieldNameMap.get(trans), key, repository, transAnnotation));
         }
         this.transFieldMetaList = buildTransTree(transFieldMetas);
     }

@@ -10,6 +10,7 @@ import io.github.orangewest.trans.resolver.TransObjResolver;
 import io.github.orangewest.trans.resolver.TransObjResolverFactory;
 import io.github.orangewest.trans.util.CollectionUtils;
 
+import java.lang.annotation.Annotation;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -130,16 +131,16 @@ public class TransService {
 
     private void doTrans(TransRepository transRepository, List<TransModel> transModels) {
         List<Object> transValues = transModels.stream().map(TransModel::getMultipleTransVal).flatMap(Collection::stream).distinct().collect(Collectors.toList());
-        Map<Object, Object> valueMap = transRepository.getTransValueMap(transModels, transValues);
+        Annotation transAnno = transModels.get(0).getTransField().getTransAnno();
+        Map<Object, Object> valueMap = transRepository.getTransValueMap(transValues, transAnno);
         if (CollectionUtils.isNotEmpty(valueMap)) {
             transModels.forEach(transModel -> transModel.setValue(valueMap));
-            return;
         }
-        List<String> keys = transModels.stream().map(x -> x.getTransField().getKey()).distinct().collect(Collectors.toList());
-        Map<Object, Object> keysMap = transRepository.getKeysMap(transModels, keys);
-        if (CollectionUtils.isNotEmpty(keysMap)) {
-            transModels.forEach(transModel -> transModel.setKeyValue(keysMap));
-        }
+//        List<String> keys = transModels.stream().map(x -> x.getTransField().getKey()).distinct().collect(Collectors.toList());
+//        Map<Object, Object> keysMap = transRepository.getKeysMap(transModels, keys);
+//        if (CollectionUtils.isNotEmpty(keysMap)) {
+//            transModels.forEach(transModel -> transModel.setKeyValue(keysMap));
+//        }
     }
 
 }

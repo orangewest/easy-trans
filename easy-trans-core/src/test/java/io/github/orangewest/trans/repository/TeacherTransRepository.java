@@ -1,8 +1,8 @@
 package io.github.orangewest.trans.repository;
 
-import io.github.orangewest.trans.core.TransModel;
 import io.github.orangewest.trans.dto.TeacherDto;
 
+import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -10,10 +10,9 @@ import java.util.stream.Collectors;
 
 public class TeacherTransRepository implements TransRepository {
 
-
     @Override
-    public Map<Object, Object> getTransValueMap(List<TransModel> transModels, List<Object> transValues) {
-        return getTeachers().stream().collect(Collectors.toMap(TeacherDto::getId, x -> x));
+    public Map<Object, Object> getTransValueMap(List<Object> transValues, Annotation transAnno) {
+        return getTeachers().stream().filter(x -> transValues.contains(x.getId())).collect(Collectors.toMap(TeacherDto::getId, x -> x));
     }
 
     public List<TeacherDto> getTeachers() {

@@ -15,12 +15,12 @@ public class UserDto {
 
     private String sex;
 
-    @DictTrans(trans = "sex", key = "sexDict")
+    @DictTrans(trans = "sex", group = "sexDict")
     private String sexName;
 
     private String job;
 
-    @DictTrans(trans = "job", key = "jobDict")
+    @DictTrans(trans = "job", group = "jobDict")
     private String jobName;
 
     private Long teacherId;

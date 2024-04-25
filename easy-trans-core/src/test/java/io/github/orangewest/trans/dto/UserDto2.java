@@ -19,7 +19,7 @@ public class UserDto2 {
 
     private List<String> jobIds;
 
-    @DictTrans(trans = "jobIds", key = "jobDict")
+    @DictTrans(trans = "jobIds", group = "jobDict")
     private List<String> jobNames;
 
     @TeacherTrans(trans = "teacherIds", key = "name")

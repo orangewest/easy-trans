@@ -7,13 +7,13 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-@Trans(using = DictTransRepository.class)
+@Trans(using = DictTransRepository.class, key = "#val")
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.FIELD)
 public @interface DictTrans {
 
     String trans();
 
-    String key();
+    String group();
 
 }

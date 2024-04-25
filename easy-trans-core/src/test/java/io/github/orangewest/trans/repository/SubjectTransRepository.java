@@ -1,8 +1,8 @@
 package io.github.orangewest.trans.repository;
 
-import io.github.orangewest.trans.core.TransModel;
 import io.github.orangewest.trans.dto.SubjectDto;
 
+import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -11,10 +11,10 @@ import java.util.stream.Collectors;
 public class SubjectTransRepository implements TransRepository {
 
     @Override
-    public Map<Object, Object> getTransValueMap(List<TransModel> transModels, List<Object> transValues) {
-        return getSubjects().stream().collect(Collectors.toMap(SubjectDto::getId, x -> x));
+    public Map<Object, Object> getTransValueMap(List<Object> transValues, Annotation transAnno) {
+        return getSubjects().stream().filter(x -> transValues.contains(x.getId())).collect(Collectors.toMap(SubjectDto::getId, x -> x));
     }
-
+    
     public List<SubjectDto> getSubjects() {
         List<SubjectDto> subjects = new ArrayList<>();
         subjects.add(new SubjectDto(1L, "语文"));
