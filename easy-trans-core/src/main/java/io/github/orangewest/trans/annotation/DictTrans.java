@@ -12,8 +12,17 @@ import java.lang.annotation.Target;
 @Target(ElementType.FIELD)
 public @interface DictTrans {
 
+
+    /**
+     * @return 需要翻译的字段
+     */
     String trans();
 
+    /**
+     * 字典组
+     *
+     * @return 字典分组
+     */
     String group();
 
 }

@@ -136,11 +136,6 @@ public class TransService {
         if (CollectionUtils.isNotEmpty(valueMap)) {
             transModels.forEach(transModel -> transModel.setValue(valueMap));
         }
-//        List<String> keys = transModels.stream().map(x -> x.getTransField().getKey()).distinct().collect(Collectors.toList());
-//        Map<Object, Object> keysMap = transRepository.getKeysMap(transModels, keys);
-//        if (CollectionUtils.isNotEmpty(keysMap)) {
-//            transModels.forEach(transModel -> transModel.setKeyValue(keysMap));
-//        }
     }
 
 }
