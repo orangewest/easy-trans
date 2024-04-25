@@ -79,8 +79,9 @@ class TransServiceTest {
         jobIds.add("1");
         jobIds.add("2");
         UserDto2 userDto = new UserDto2(1L, "张三", teacherIds, jobIds);
+        System.out.println("翻译前：" + userDto);
         transService.trans(userDto);
-        System.out.println(userDto);
+        System.out.println("翻译后：" + userDto);
         List<UserDto2> userDtoList = new ArrayList<>();
         UserDto2 userDto2 = new UserDto2(2L, "李四", teacherIds, jobIds);
         List<Long> teacherIds2 = new ArrayList<>();
@@ -94,8 +95,9 @@ class TransServiceTest {
         userDtoList.add(userDto4);
         userDtoList.add(userDto3);
         userDtoList.add(userDto2);
+        System.out.println("翻译前：" + userDtoList);
         transService.trans(userDtoList);
-        System.out.println(userDtoList);
+        System.out.println("翻译后：" + userDtoList);
     }
 
     @Test
@@ -109,14 +111,15 @@ class TransServiceTest {
         jobIds.add("3");
         UserDto2 userDto = new UserDto2(1L, "张三", teacherIds, jobIds);
         Result<UserDto2> result = new Result<>(userDto, "success");
-        System.out.println(result);
+        System.out.println("翻译前：" + result);
         transService.trans(result);
-        System.out.println(result);
+        System.out.println("翻译后：" + result);
         UserDto2 userDto2 = new UserDto2(2L, "李四", teacherIds, jobIds);
         Result<UserDto2> result2 = new Result<>(userDto2, "success");
         Result<Result<UserDto2>> result3 = new Result<>(result2, "success");
+        System.out.println("翻译前：" + result3);
         transService.trans(result3);
-        System.out.println(result3);
+        System.out.println("翻译后：" + result3);
     }
 
 }
