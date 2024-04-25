@@ -9,6 +9,7 @@ import java.util.*;
 public class ReflectUtils {
 
     /**
+     * @param clazz class对象
      * @return 获取一个class的所有的字段
      */
     public static List<Field> getAllField(Class<?> clazz) {
