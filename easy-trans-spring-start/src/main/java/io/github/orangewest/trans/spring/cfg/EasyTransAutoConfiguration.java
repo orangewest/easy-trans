@@ -1,12 +1,13 @@
 package io.github.orangewest.trans.spring.cfg;
 
 import io.github.orangewest.trans.repository.dict.DictLoader;
+import io.github.orangewest.trans.repository.dict.DictTransRepository;
 import io.github.orangewest.trans.service.TransService;
 import io.github.orangewest.trans.spring.aop.AutoTransAspect;
-import io.github.orangewest.trans.spring.register.DictTransRegister;
 import io.github.orangewest.trans.spring.register.EasyTransRegister;
 import io.github.orangewest.trans.spring.uitl.TransUtil;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -14,6 +15,7 @@ import org.springframework.context.annotation.Configuration;
 public class EasyTransAutoConfiguration {
 
     @Bean
+    @ConditionalOnMissingBean
     public TransService transService() {
         TransService transService = new TransService();
         transService.init();
@@ -22,8 +24,8 @@ public class EasyTransAutoConfiguration {
 
     @Bean
     @ConditionalOnBean(DictLoader.class)
-    public DictTransRegister dictTransRegister() {
-        return new DictTransRegister();
+    public DictTransRepository dictTransRepository(DictLoader dictLoader) {
+        return new DictTransRepository(dictLoader);
     }
 
     @Bean
