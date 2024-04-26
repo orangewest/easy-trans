@@ -6,7 +6,7 @@
     <parent>
         <groupId>io.github.orangewest</groupId>
         <artifactId>easy-trans</artifactId>
-        <version>0.0.3</version>
+        <version>0.0.4</version>
     </parent>
 
     <artifactId>easy-trans-spring-start</artifactId>

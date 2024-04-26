@@ -11,6 +11,7 @@ import io.github.orangewest.trans.repository.dict.DictTransRepository;
 import io.github.orangewest.trans.resolver.ResultResolver;
 import io.github.orangewest.trans.resolver.TransObjResolverFactory;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -20,7 +21,7 @@ import java.util.Map;
 
 class TransServiceTest {
 
-    TransService transService = new TransService();
+    TransService transService;
 
     @BeforeAll
     public static void before() {
@@ -49,6 +50,12 @@ class TransServiceTest {
 
         }));
         TransObjResolverFactory.register(new ResultResolver());
+    }
+
+    @BeforeEach
+    public void init() {
+        transService = new TransService();
+        transService.init();
     }
 
     @Test

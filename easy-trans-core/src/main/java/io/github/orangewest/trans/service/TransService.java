@@ -21,13 +21,29 @@ import java.util.stream.Collectors;
 
 public class TransService {
 
-    private final static ExecutorService EXECUTORS = Executors.newCachedThreadPool(r -> new Thread(r, "trans-thread-" + r.hashCode()));
+    private ExecutorService executor;
+
+    private volatile boolean isInit = false;
+
+    public void setExecutor(ExecutorService executor) {
+        this.executor = executor;
+    }
+
+    public void init() {
+        if (this.executor == null) {
+            this.executor = Executors.newCachedThreadPool(r -> new Thread(r, "trans-thread-" + r.hashCode()));
+        }
+        isInit = true;
+    }
 
     /**
      * @param obj 需要被翻译的对象
      * @return 是否翻译成功
      */
     public boolean trans(Object obj) {
+        if (!isInit) {
+            return false;
+        }
         obj = resolveObj(obj);
         if (obj == null) {
             return false;
@@ -75,7 +91,7 @@ public class TransService {
                             listMap.entrySet()
                                     .stream()
                                     .map(entry -> CompletableFuture.runAsync(() ->
-                                            doTrans(objList, entry.getKey(), entry.getValue()), EXECUTORS))
+                                            doTrans(objList, entry.getKey(), entry.getValue()), executor))
                                     .toArray(CompletableFuture[]::new))
                     .join();
         } else {
@@ -119,7 +135,7 @@ public class TransService {
             //说明有多个实体，异步查询
             CompletableFuture<?>[] futures = toTransMap.values()
                     .stream()
-                    .map(transModels -> CompletableFuture.runAsync(() -> doTrans(transRepository, transModels), EXECUTORS))
+                    .map(transModels -> CompletableFuture.runAsync(() -> doTrans(transRepository, transModels), executor))
                     .toArray(CompletableFuture[]::new);
             CompletableFuture.allOf(futures).join();
 

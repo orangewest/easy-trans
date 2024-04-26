@@ -1,6 +1,6 @@
 package io.github.orangewest.trans.spring.aop;
 
-import io.github.orangewest.trans.util.TransUtil;
+import io.github.orangewest.trans.spring.uitl.TransUtil;
 import org.aspectj.lang.JoinPoint;
 import org.aspectj.lang.annotation.AfterReturning;
 import org.aspectj.lang.annotation.Aspect;
