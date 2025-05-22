@@ -27,6 +27,6 @@ public @interface Trans {
     /**
      * @return 翻译数据获取仓库
      */
-    Class<? extends TransRepository> using();
+    Class<? extends TransRepository<?, ?>> using();
 
 }

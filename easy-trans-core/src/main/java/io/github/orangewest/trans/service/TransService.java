@@ -3,6 +3,7 @@ package io.github.orangewest.trans.service;
 import io.github.orangewest.trans.core.TransClassMeta;
 import io.github.orangewest.trans.core.TransFieldMeta;
 import io.github.orangewest.trans.core.TransModel;
+import io.github.orangewest.trans.core.TransResult;
 import io.github.orangewest.trans.manager.TransClassMetaCacheManager;
 import io.github.orangewest.trans.repository.TransRepository;
 import io.github.orangewest.trans.repository.TransRepositoryFactory;
@@ -85,7 +86,7 @@ public class TransService {
     }
 
     private void doTrans(List<Object> objList, List<TransFieldMeta> transFieldMetaList) {
-        Map<? extends Class<? extends TransRepository>, List<TransFieldMeta>> listMap = transFieldMetaList.stream().collect(Collectors.groupingBy(TransFieldMeta::getRepository));
+        Map<? extends Class<? extends TransRepository<?, ?>>, List<TransFieldMeta>> listMap = transFieldMetaList.stream().collect(Collectors.groupingBy(TransFieldMeta::getRepository));
         if (listMap.size() > 1) {
             CompletableFuture.allOf(
                             listMap.entrySet()
@@ -99,8 +100,8 @@ public class TransService {
         }
     }
 
-    private void doTrans(List<Object> objList, Class<? extends TransRepository> transClass, List<TransFieldMeta> transFields) {
-        TransRepository transRepository = TransRepositoryFactory.getTransRepository(transClass);
+    private void doTrans(List<Object> objList, Class<? extends TransRepository<?, ?>> transClass, List<TransFieldMeta> transFields) {
+        TransRepository<Object, Object> transRepository = TransRepositoryFactory.getTransRepository(transClass);
         if (transRepository == null) {
             return;
         }
@@ -129,7 +130,7 @@ public class TransService {
                 .collect(Collectors.groupingBy(x -> x.getTransField().getTrans()));
     }
 
-    private void doTrans_0(TransRepository transRepository, Map<String, List<TransModel>> toTransMap) {
+    private void doTrans_0(TransRepository<Object, Object> transRepository, Map<String, List<TransModel>> toTransMap) {
         //分组查询
         if (toTransMap.size() > 1) {
             //说明有多个实体，异步查询
@@ -145,12 +146,12 @@ public class TransService {
         }
     }
 
-    private void doTrans(TransRepository transRepository, List<TransModel> transModels) {
+    private void doTrans(TransRepository<Object, Object> transRepository, List<TransModel> transModels) {
         List<Object> transValues = transModels.stream().map(TransModel::getMultipleTransVal).flatMap(Collection::stream).distinct().collect(Collectors.toList());
         Annotation transAnno = transModels.get(0).getTransField().getTransAnno();
-        Map<Object, Object> valueMap = transRepository.getTransValueMap(transValues, transAnno);
-        if (CollectionUtils.isNotEmpty(valueMap)) {
-            transModels.forEach(transModel -> transModel.setValue(valueMap));
+        List<TransResult<Object, Object>> transValueList = transRepository.getTransValueList(transValues, transAnno);
+        if (CollectionUtils.isNotEmpty(transValueList)) {
+            transModels.forEach(transModel -> transModel.fillValue(transValueList));
         }
     }
 

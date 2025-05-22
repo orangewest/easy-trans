@@ -12,7 +12,7 @@ public class EasyTransRegister implements BeanPostProcessor {
     @Override
     public Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
         if (bean instanceof TransRepository) {
-            TransRepositoryFactory.register((TransRepository) bean);
+            TransRepositoryFactory.register((TransRepository<?, ?>) bean);
         } else if (bean instanceof TransObjResolver) {
             TransObjResolverFactory.register((TransObjResolver) bean);
         }

@@ -8,13 +8,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
-public class TeacherTransRepository implements TransRepository<Long, TeacherDto> {
+public class TeacherTrans2Repository implements TransRepository<Long, Boolean> {
 
     @Override
-    public List<TransResult<Long, TeacherDto>> getTransValueList(List<Long> transValues, Annotation transAnno) {
+    public List<TransResult<Long, Boolean>> getTransValueList(List<Long> transValues, Annotation transAnno) {
         return getTeachers().stream()
                 .filter(x -> transValues.contains(x.getId()))
-                .map(x -> TransResult.of(x.getId(), x))
+                .map(x -> TransResult.of(x.getId(), x.getSubjectId() == 1))
                 .collect(Collectors.toList());
     }
 

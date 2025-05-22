@@ -33,14 +33,14 @@ public class TransFieldMeta {
     /**
      * 翻译仓库
      */
-    private final Class<? extends TransRepository> repository;
+    private final Class<? extends TransRepository<?, ?>> repository;
 
     /**
      * 子属性
      */
     private List<TransFieldMeta> children;
 
-    public TransFieldMeta(Field field, Field transField, String key, Class<? extends TransRepository> repository, Annotation transAnno) {
+    public TransFieldMeta(Field field, Field transField, String key, Class<? extends TransRepository<?, ?>> repository, Annotation transAnno) {
         this.field = field;
         this.transField = transField;
         this.trans = transField.getName();
@@ -65,7 +65,7 @@ public class TransFieldMeta {
         return key;
     }
 
-    public Class<? extends TransRepository> getRepository() {
+    public Class<? extends TransRepository<?, ?>> getRepository() {
         return repository;
     }
 

@@ -82,7 +82,7 @@ maven引入
 <dependency>
 <groupId>io.github.orangewest</groupId>
 <artifactId>easy-trans-core</artifactId>
-<version>0.0.3</version>
+<version>0.1.0</version>
 </dependency>
 ```
 
@@ -173,21 +173,24 @@ using 说明的是使用哪个数据仓库获取数据<br />
 TeacherTransRepository 代码如下：
 
 ```java
-public class TeacherTransRepository implements TransRepository {
+public class TeacherTransRepository implements TransRepository<Long, TeacherDto> {
 
-  @Override
-  public Map<Object, Object> getTransValueMap(List<Object> transValues, Annotation transAnno) {
-    return getTeachers().stream().filter(x -> transValues.contains(x.getId())).collect(Collectors.toMap(TeacherDto::getId, x -> x));
-  }
+    @Override
+    public List<TransResult<Long, TeacherDto>> getTransValueList(List<Long> transValues, Annotation transAnno) {
+        return getTeachers().stream()
+                .filter(x -> transValues.contains(x.getId()))
+                .map(x -> TransResult.of(x.getId(), x))
+                .collect(Collectors.toList());
+    }
 
-  public List<TeacherDto> getTeachers() {
-    List<TeacherDto> teachers = new ArrayList<>();
-    teachers.add(new TeacherDto(1L, "老师1", 1L));
-    teachers.add(new TeacherDto(2L, "老师2", 2L));
-    teachers.add(new TeacherDto(3L, "老师3", 3L));
-    teachers.add(new TeacherDto(4L, "老师4", 4L));
-    return teachers;
-  }
+    public List<TeacherDto> getTeachers() {
+        List<TeacherDto> teachers = new ArrayList<>();
+        teachers.add(new TeacherDto(1L, "老师1", 1L));
+        teachers.add(new TeacherDto(2L, "老师2", 2L));
+        teachers.add(new TeacherDto(3L, "老师3", 3L));
+        teachers.add(new TeacherDto(4L, "老师4", 4L));
+        return teachers;
+    }
 
 }
 
@@ -197,21 +200,24 @@ public class TeacherTransRepository implements TransRepository {
 SubjectTransRepository
 
 ```java
-public class SubjectTransRepository implements TransRepository {
+public class SubjectTransRepository implements TransRepository<Long, SubjectDto> {
 
-  @Override
-  public Map<Object, Object> getTransValueMap(List<Object> transValues, Annotation transAnno) {
-    return getSubjects().stream().filter(x -> transValues.contains(x.getId())).collect(Collectors.toMap(SubjectDto::getId, x -> x));
-  }
+    @Override
+    public List<TransResult<Long, SubjectDto>> getTransValueList(List<Long> transValues, Annotation transAnno) {
+        return getSubjects().stream()
+                .filter(x -> transValues.contains(x.getId()))
+                .map(x -> TransResult.of(x.getId(), x))
+                .collect(Collectors.toList());
+    }
 
-  public List<SubjectDto> getSubjects() {
-    List<SubjectDto> subjects = new ArrayList<>();
-    subjects.add(new SubjectDto(1L, "语文"));
-    subjects.add(new SubjectDto(2L, "数学"));
-    subjects.add(new SubjectDto(3L, "英语"));
-    subjects.add(new SubjectDto(4L, "物理"));
-    return subjects;
-  }
+    public List<SubjectDto> getSubjects() {
+        List<SubjectDto> subjects = new ArrayList<>();
+        subjects.add(new SubjectDto(1L, "语文"));
+        subjects.add(new SubjectDto(2L, "数学"));
+        subjects.add(new SubjectDto(3L, "英语"));
+        subjects.add(new SubjectDto(4L, "物理"));
+        return subjects;
+    }
 
 }
 ```
@@ -241,7 +247,6 @@ private Map<String, Map<String, String>>dictMap(){
         map.get("jobDict").put("6","团长");
         return map;
         }
-
         }));
 ```
 
@@ -264,7 +269,6 @@ void trans(){
         System.out.println("翻译前："+userDtoList);
         transService.trans(userDtoList);
         System.out.println("翻译后："+userDtoList);
-
         }
 ```
 
@@ -490,7 +494,88 @@ void trans3(){
         翻译后：Result(data=Result(data=UserDto2(id=2,name=李四,teacherIds=[1,2],jobIds=[1,2,3],jobNames=[学习委员,生活委员,宣传委员],teacherName=[老师1,老师2],subjectIds=[1,2],subjectNames=[语文,数学]),message=success),message=success)
 ```
 
-### 4、与springboot集成
+### 4、对象直接填充
+
+有时候我们可能需要把完整的对象填充到需要翻译的字段中，这个时候，只需要key指定#all即可，如果返回的结果是基本类型（包括String），也会直接填充。
+
+```java
+
+@Data
+public class UserDto3 {
+
+    private Long id;
+
+    private String name;
+
+    private Long teacherId;
+
+    @Trans(trans = "teacherId", key = TransModel.VAL_ALL, using = TeacherTransRepository.class)
+    private TeacherDto teacher;
+
+    @Trans(trans = "teacherId", using = TeacherTrans2Repository.class)
+    private Boolean isYuwenTeacher;
+
+    public UserDto3(Long id, String name, Long teacherId) {
+        this.id = id;
+        this.name = name;
+        this.teacherId = teacherId;
+    }
+}
+
+```
+
+```java
+public class TeacherTrans2Repository implements TransRepository<Long, Boolean> {
+
+    @Override
+    public List<TransResult<Long, Boolean>> getTransValueList(List<Long> transValues, Annotation transAnno) {
+        return getTeachers().stream()
+                .filter(x -> transValues.contains(x.getId()))
+                .map(x -> TransResult.of(x.getId(), x.getSubjectId() == 1))
+                .collect(Collectors.toList());
+    }
+
+    public List<TeacherDto> getTeachers() {
+        List<TeacherDto> teachers = new ArrayList<>();
+        teachers.add(new TeacherDto(1L, "老师1", 1L));
+        teachers.add(new TeacherDto(2L, "老师2", 2L));
+        teachers.add(new TeacherDto(3L, "老师3", 3L));
+        teachers.add(new TeacherDto(4L, "老师4", 4L));
+        return teachers;
+    }
+
+}
+```
+
+```java
+    @Test
+    void trans4(){
+            UserDto3 userDto=new UserDto3(1L,"张三",2L);
+            System.out.println("翻译前："+userDto);
+            transService.trans(userDto);
+            System.out.println("翻译后："+userDto);
+            Assertions.assertNotNull(userDto.getTeacher());
+            Assertions.assertEquals("老师2",userDto.getTeacher().getName());
+            List<UserDto3> userDtoList=new ArrayList<>();
+        UserDto3 userDto2=new UserDto3(2L,"李四",1L);
+        UserDto3 userDto3=new UserDto3(3L,"王五",2L);
+        UserDto3 userDto4=new UserDto3(4L,"赵六",3L);
+        userDtoList.add(userDto2);
+        userDtoList.add(userDto3);
+        userDtoList.add(userDto4);
+        System.out.println("翻译前："+userDtoList);
+        transService.trans(userDtoList);
+        System.out.println("翻译后："+userDtoList);
+        Assertions.assertNotNull(userDtoList.get(0).getTeacher());
+        Assertions.assertEquals("老师1",userDtoList.get(0).getTeacher().getName());
+        Assertions.assertNotNull(userDtoList.get(1).getTeacher());
+        Assertions.assertEquals("老师2",userDtoList.get(1).getTeacher().getName());
+        Assertions.assertNotNull(userDtoList.get(2).getTeacher());
+        Assertions.assertEquals("老师3",userDtoList.get(2).getTeacher().getName());
+        }
+```
+
+### 5、与springboot集成
 
 maven 引入
 
@@ -498,7 +583,7 @@ maven 引入
 <dependency>
 <groupId>io.github.orangewest</groupId>
 <artifactId>easy-trans-spring-start</artifactId>
-<version>0.0.3</version>
+<version>0.1.0</version>
 </dependency>
 ```
 
@@ -517,7 +602,7 @@ public Result<PageData<BizDTO>>page(Query query){
 
 ```
 
-### 5、与orm框架集成
+### 6、与orm框架集成
 
 通常很多翻译需求，都是根据id去查询实体对象，我们可以通过orm框架对此进行统一翻译
 示例：
@@ -549,39 +634,34 @@ public @interface DbTrans {
 ```java
 
 @Component
-public class DbTransRepository implements TransRepository {
+public class DbTransRepository implements TransRepository<Long, BaseEntity> {
 
-  @Resource
-  private TransDriver transDriver;
+    @Resource
+    private TransDriver transDriver;
 
-  @Override
-  public Map<Object, Object> getTransValueMap(List<Object> transValues, Annotation transAnno) {
-    if (transAnno instanceof DbTrans) {
-      DbTrans dbTrans = (DbTrans) transAnno;
-      List<? extends BaseEntity> entities = transDriver.findByIds(getIds(transValues), dbTrans.entity());
-      return entities.stream().collect(Collectors.toMap(BaseEntity::getId, x -> x));
+    @Override
+    public List<TransResult<Long, BaseEntity>> getTransValueList(List<Long> transValues, Annotation transAnno) {
+        if (transAnno instanceof DbTrans) {
+            DbTrans dbTrans = (DbTrans) transAnno;
+            @SuppressWarnings("unchecked")
+            List<BaseEntity> entities = (List<BaseEntity>) transDriver.findByIds(transValues, dbTrans.entity());
+            return entities.stream()
+                    .map(x -> TransResult.of(x.getId(), x))
+                    .collect(Collectors.toList());
+        }
+        return Collections.emptyList();
     }
-    return Collections.emptyMap();
-  }
-
-  /**
-   * 获取查询id
-   */
-  private List<Long> getIds(List<Object> transValues) {
-    return transValues.stream()
-            .map(x -> (Long) x)
-            .collect(Collectors.toList());
-  }
 
 }
+
 
 ```
 
 ```java
 public interface TransDriver {
 
-  /**
-   * 根据ids获取集合
+    /**
+     * 根据ids获取集合
    *
    * @param ids         ids
    * @param targetClass 目标类类名

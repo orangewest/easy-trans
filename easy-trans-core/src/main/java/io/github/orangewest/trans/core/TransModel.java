@@ -17,6 +17,11 @@ public class TransModel {
     public final static String VAL_EXTRACT = "#val";
 
     /**
+     * 需要被翻译的属性值全部
+     */
+    public final static String VAL_ALL = "#all";
+
+    /**
      * 需要被翻译的属性
      */
     private final TransFieldMeta transFieldMeta;
@@ -38,6 +43,8 @@ public class TransModel {
 
     private final boolean isValExtract;
 
+    private final boolean isFillAll;
+
     public TransModel(Object obj, TransFieldMeta field) {
         this.transFieldMeta = field;
         this.obj = obj;
@@ -46,53 +53,76 @@ public class TransModel {
         this.isMultiple = (Iterable.class).isAssignableFrom(type) || type.isArray();
         this.transVal = ReflectUtils.getFieldValue(this.obj, transField);
         this.isValExtract = VAL_EXTRACT.equals(this.transFieldMeta.getKey());
+        this.isFillAll = VAL_ALL.equals(this.transFieldMeta.getKey());
     }
 
-    public void setValue(Map<Object, Object> transValMap) {
-        Map<Object, ? extends Map<?, ?>> objValMap = transValMap.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, entry -> ReflectUtils.beanToMap(entry.getValue())));
+    public void fillValue(List<TransResult<Object, Object>> transValueList) {
         Object objValue = null;
+        Map<Object, Object> valMap = transValueList.stream().collect(Collectors.toMap(TransResult::getTransVal, TransResult::getTransResult));
+        boolean isFillAll = this.isFillAll || transValueList.get(0).isPrimitiveResult();
         if (this.isMultiple) {
             List<Object> multipleTransVal = getMultipleTransVal();
             objValue = getObjValue(multipleTransVal);
             if (objValue instanceof Collection) {
                 @SuppressWarnings("unchecked")
                 Collection<Object> objCollection = (Collection<Object>) objValue;
-                multipleTransVal.forEach(val -> {
+                if (isFillAll) {
+                    multipleTransVal.forEach(val -> objCollection.add(valMap.get(val)));
+                } else {
+                    Map<Object, ? extends Map<?, ?>> objValMap = transValueList.stream()
+                            .collect(Collectors.toMap(TransResult::getTransVal, x -> ReflectUtils.beanToMap(x.getTransResult())));
                     if (this.isValExtract) {
-                        for (Map<?, ?> objMap : objValMap.values()) {
-                            objCollection.add(objMap.get(val));
-                        }
+                        multipleTransVal.forEach(val -> {
+                            for (Map<?, ?> objMap : objValMap.values()) {
+                                objCollection.add(objMap.get(val));
+                            }
+                        });
                     } else {
-                        Map<?, ?> objMap = objValMap.get(val);
-                        if (objMap != null) {
-                            objCollection.add(objMap.get(this.transFieldMeta.getKey()));
-                        }
+                        multipleTransVal.forEach(val -> {
+                            Map<?, ?> objMap = objValMap.get(val);
+                            if (objMap != null) {
+                                objCollection.add(objMap.get(this.transFieldMeta.getKey()));
+                            }
+                        });
                     }
-                });
+                }
             } else if (objValue instanceof Object[]) {
                 Object[] objArray = (Object[]) objValue;
-                for (int i = 0; i < multipleTransVal.size(); i++) {
+                if (isFillAll) {
+                    for (int i = 0; i < multipleTransVal.size(); i++) {
+                        objArray[i] = valMap.get(multipleTransVal.get(i));
+                    }
+                } else {
+                    Map<Object, ? extends Map<?, ?>> objValMap = transValueList.stream()
+                            .collect(Collectors.toMap(TransResult::getTransVal, x -> ReflectUtils.beanToMap(x.getTransResult())));
                     if (this.isValExtract) {
-                        for (Map<?, ?> objMap : objValMap.values()) {
-                            objArray[i] = objMap.get(multipleTransVal.get(i));
+                        for (int i = 0; i < multipleTransVal.size(); i++) {
+                            for (Map<?, ?> objMap : objValMap.values()) {
+                                objArray[i] = objMap.get(multipleTransVal.get(i));
+                            }
                         }
                     } else {
-                        Map<?, ?> objMap = objValMap.get(multipleTransVal.get(i));
-                        if (objMap != null) {
-                            objArray[i] = objMap.get(this.transFieldMeta.getKey());
+                        for (int i = 0; i < multipleTransVal.size(); i++) {
+                            Map<?, ?> objMap = objValMap.get(multipleTransVal.get(i));
+                            if (objMap != null) {
+                                objArray[i] = objMap.get(this.transFieldMeta.getKey());
+                            }
                         }
                     }
                 }
             }
         } else {
-            if (this.isValExtract) {
-                for (Map<?, ?> value : objValMap.values()) {
-                    objValue = value.get(this.transVal);
-                }
+            if (isFillAll) {
+                objValue = valMap.get(this.transVal);
             } else {
-                Map<?, ?> objMap = objValMap.get(this.transVal);
-                if (objMap != null) {
-                    objValue = objMap.get(this.transFieldMeta.getKey());
+                if (this.isValExtract) {
+                    for (Object value : valMap.values()) {
+                        Map<?, ?> objValMap = ReflectUtils.beanToMap(value);
+                        objValue = objValMap.get(this.transVal);
+                    }
+                } else {
+                    Map<?, ?> objValMap = ReflectUtils.beanToMap(valMap.get(this.transVal));
+                    objValue = objValMap.get(this.transFieldMeta.getKey());
                 }
             }
         }

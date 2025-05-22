@@ -59,7 +59,7 @@ public class TransClassMeta implements Serializable {
             Trans transAnno = field.getAnnotation(Trans.class);
             String trans = null;
             String key = null;
-            Class<? extends TransRepository> repository = null;
+            Class<? extends TransRepository<?, ?>> repository = null;
             Annotation transAnnotation = transAnno;
             if (transAnno == null) {
                 Annotation[] annotations = field.getDeclaredAnnotations();

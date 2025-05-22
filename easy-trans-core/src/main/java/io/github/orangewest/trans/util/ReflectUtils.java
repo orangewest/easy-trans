@@ -5,8 +5,22 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.AccessibleObject;
 import java.lang.reflect.Field;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class ReflectUtils {
+
+    public static final Map<Class<?>, Class<?>> WRAPPER_PRIMITIVE_MAP = new ConcurrentHashMap<>(8);
+
+    static {
+        WRAPPER_PRIMITIVE_MAP.put(Boolean.class, boolean.class);
+        WRAPPER_PRIMITIVE_MAP.put(Byte.class, byte.class);
+        WRAPPER_PRIMITIVE_MAP.put(Character.class, char.class);
+        WRAPPER_PRIMITIVE_MAP.put(Double.class, double.class);
+        WRAPPER_PRIMITIVE_MAP.put(Float.class, float.class);
+        WRAPPER_PRIMITIVE_MAP.put(Integer.class, int.class);
+        WRAPPER_PRIMITIVE_MAP.put(Long.class, long.class);
+        WRAPPER_PRIMITIVE_MAP.put(Short.class, short.class);
+    }
 
     /**
      * @param clazz class对象
@@ -70,6 +84,9 @@ public class ReflectUtils {
      * @return 对象转Map
      */
     public static Map<?, ?> beanToMap(Object bean) {
+        if (bean == null) {
+            return Collections.emptyMap();
+        }
         if (bean instanceof Map) {
             return (Map<?, ?>) bean;
         }
@@ -80,4 +97,12 @@ public class ReflectUtils {
         }
         return map;
     }
+
+    public static boolean isPrimitiveWrapper(Class<?> clazz) {
+        if (null == clazz) {
+            return false;
+        }
+        return WRAPPER_PRIMITIVE_MAP.containsKey(clazz);
+    }
+
 }

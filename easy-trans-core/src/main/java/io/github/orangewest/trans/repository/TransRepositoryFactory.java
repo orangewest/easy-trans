@@ -9,13 +9,15 @@ public class TransRepositoryFactory {
     /**
      * key type  val是对应type的service
      */
-    private final static Map<Class<? extends TransRepository>, TransRepository> TRANS_REPOSITORY_MAP = new ConcurrentHashMap<>();
+    @SuppressWarnings("rawtypes")
+    private final static Map<Class<? extends TransRepository>, TransRepository<?, ?>> TRANS_REPOSITORY_MAP = new ConcurrentHashMap<>();
 
-    public static TransRepository getTransRepository(Class<? extends TransRepository> repository) {
-        return TRANS_REPOSITORY_MAP.get(repository);
+    @SuppressWarnings("unchecked")
+    public static TransRepository<Object, Object> getTransRepository(Class<? extends TransRepository<?, ?>> repository) {
+        return (TransRepository<Object, Object>) TRANS_REPOSITORY_MAP.get(repository);
     }
 
-    public static void register(TransRepository transRepository) {
+    public static void register(TransRepository<?, ?> transRepository) {
         if (transRepository == null) {
             return;
         }
