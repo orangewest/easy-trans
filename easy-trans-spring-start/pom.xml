@@ -10,6 +10,7 @@
     </parent>
 
     <artifactId>easy-trans-spring-start</artifactId>
+    <name>easy-trans-spring-start</name>
 
     <properties>
         <maven.compiler.source>8</maven.compiler.source>
