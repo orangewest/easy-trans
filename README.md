@@ -657,16 +657,15 @@ public class DbTransRepository implements TransRepository<Long, BaseEntity> {
     private TransDriver transDriver;
 
     @Override
-    public List<TransResult<Long, BaseEntity>> getTransValueList(List<Long> transValues, Annotation transAnno) {
+    public Map<Long, BaseEntity> getTransValueMap(List<Long> transValues, Annotation transAnno) {
         if (transAnno instanceof DbTrans) {
             DbTrans dbTrans = (DbTrans) transAnno;
             @SuppressWarnings("unchecked")
             List<BaseEntity> entities = (List<BaseEntity>) transDriver.findByIds(transValues, dbTrans.entity());
             return entities.stream()
-                    .map(x -> TransResult.of(x.getId(), x))
-                    .collect(Collectors.toList());
+                    .collect(Collectors.toMap(BaseEntity::getId, x -> x));
         }
-        return Collections.emptyList();
+        return Collections.emptyMap();
     }
 
 }
