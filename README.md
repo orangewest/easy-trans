@@ -58,13 +58,30 @@ public @interface Trans {
    */
   String key() default "";
 
-  /**
-   * @return 翻译数据获取仓库
-   */
-  Class<? extends TransRepository> using();
+    /**
+     * @return 翻译数据获取仓库
+     */
+    Class<? extends TransRepository> using();
 
 }
 
+```
+
+</br>翻译仓库
+
+```java
+public interface TransRepository<T, R> {
+
+    /**
+     * 获取翻译结果（适用于数据库等翻译）
+     *
+     * @param transValues 需要翻译的值
+     * @param transAnno   翻译对象上的注解
+     * @return 查询结果值 val-翻译值
+     */
+    Map<T, R> getTransValueMap(List<T> transValues, Annotation transAnno);
+
+}
 ```
 
 ## 二、优点
@@ -80,9 +97,9 @@ maven引入
 
 ```java
 <dependency>
-<groupId>io.github.orangewest</groupId>
-<artifactId>easy-trans-core</artifactId>
-<version>0.1.0</version>
+    <groupId>io.github.orangewest</groupId>
+    <artifactId>easy-trans-core</artifactId>
+    <version>0.1.1</version>
 </dependency>
 ```
 
@@ -95,12 +112,12 @@ maven引入
 @NoArgsConstructor
 public class TeacherDto {
 
-  private Long id;
-
-  private String name;
-
-  // 关联教哪个学科
-  private Long subjectId;
+    private Long id;
+    
+    private String name;
+    
+    // 关联教哪个学科
+    private Long subjectId;
 
 }
 
@@ -115,9 +132,9 @@ public class TeacherDto {
 @NoArgsConstructor
 public class SubjectDto {
 
-  private Long id;
-
-  private String name;
+    private Long id;
+    
+    private String name;
 
 }
 
@@ -130,39 +147,39 @@ public class SubjectDto {
 @Data
 public class UserDto {
 
-  private Long id;
+    private Long id;
 
-  private String name;
+    private String name;
 
-  private String sex;
+    private String sex;
 
-  @DictTrans(trans = "sex", group = "sexDict")
-  private String sexName;
+    @DictTrans(trans = "sex", group = "sexDict")
+    private String sexName;
 
-  private String job;
+    private String job;
 
-  @DictTrans(trans = "job", group = "jobDict")
-  private String jobName;
+    @DictTrans(trans = "job", group = "jobDict")
+    private String jobName;
 
-  // 关联老师id
-  private Long teacherId;
+    // 关联老师id
+    private Long teacherId;
 
-  @Trans(trans = "teacherId", key = "name", using = TeacherTransRepository.class)
-  private String teacherName;
+    @Trans(trans = "teacherId", key = "name", using = TeacherTransRepository.class)
+    private String teacherName;
 
-  @Trans(trans = "teacherId", key = "subjectId", using = TeacherTransRepository.class)
-  private Long subjectId;
+    @Trans(trans = "teacherId", key = "subjectId", using = TeacherTransRepository.class)
+    private Long subjectId;
 
-  @Trans(trans = "subjectId", using = SubjectTransRepository.class, key = "name")
-  private String subjectName;
+    @Trans(trans = "subjectId", using = SubjectTransRepository.class, key = "name")
+    private String subjectName;
 
-  public UserDto(Long id, String name, Long teacherId, String sex, String job) {
-    this.id = id;
-    this.name = name;
-    this.teacherId = teacherId;
-    this.sex = sex;
-    this.job = job;
-  }
+    public UserDto(Long id, String name, Long teacherId, String sex, String job) {
+        this.id = id;
+        this.name = name;
+        this.teacherId = teacherId;
+        this.sex = sex;
+        this.job = job;
+    }
 }
 ```
 
@@ -176,11 +193,10 @@ TeacherTransRepository 代码如下：
 public class TeacherTransRepository implements TransRepository<Long, TeacherDto> {
 
     @Override
-    public List<TransResult<Long, TeacherDto>> getTransValueList(List<Long> transValues, Annotation transAnno) {
+    public Map<Long, TeacherDto> getTransValueMap(List<Long> transValues, Annotation transAnno) {
         return getTeachers().stream()
                 .filter(x -> transValues.contains(x.getId()))
-                .map(x -> TransResult.of(x.getId(), x))
-                .collect(Collectors.toList());
+                .collect(Collectors.toMap(TeacherDto::getId, x -> x));
     }
 
     public List<TeacherDto> getTeachers() {
@@ -194,6 +210,7 @@ public class TeacherTransRepository implements TransRepository<Long, TeacherDto>
 
 }
 
+
 ```
 
 模拟根据id查询，获取指定id的数据。
@@ -203,11 +220,10 @@ SubjectTransRepository
 public class SubjectTransRepository implements TransRepository<Long, SubjectDto> {
 
     @Override
-    public List<TransResult<Long, SubjectDto>> getTransValueList(List<Long> transValues, Annotation transAnno) {
+    public Map<Long, SubjectDto> getTransValueMap(List<Long> transValues, Annotation transAnno) {
         return getSubjects().stream()
                 .filter(x -> transValues.contains(x.getId()))
-                .map(x -> TransResult.of(x.getId(), x))
-                .collect(Collectors.toList());
+                .collect(Collectors.toMap(SubjectDto::getId, x -> x));
     }
 
     public List<SubjectDto> getSubjects() {
@@ -226,27 +242,27 @@ public class SubjectTransRepository implements TransRepository<Long, SubjectDto>
 
 ```java
 TransRepositoryFactory.register(new TeacherTransRepository());
-        TransRepositoryFactory.register(new SubjectTransRepository());
-        TransRepositoryFactory.register(new DictTransRepository(new DictLoader(){
-@Override
-public Map<String, String> loadDict(String dictGroup){
-        return dictMap().getOrDefault(dictGroup,new HashMap<>());
-        }
-
-private Map<String, Map<String, String>>dictMap(){
-        Map<String, Map<String, String>>map=new HashMap<>();
-        map.put("sexDict",new HashMap<>());
-        map.put("jobDict",new HashMap<>());
-        map.get("sexDict").put("1","男");
-        map.get("sexDict").put("2","女");
-        map.get("jobDict").put("1","学习委员");
-        map.get("jobDict").put("2","生活委员");
-        map.get("jobDict").put("3","宣传委员");
-        map.get("jobDict").put("4","班长");
-        map.get("jobDict").put("5","团支书");
-        map.get("jobDict").put("6","团长");
-        return map;
-        }
+TransRepositoryFactory.register(new SubjectTransRepository());
+TransRepositoryFactory.register(new DictTransRepository(new DictLoader(){
+    @Override
+    public Map<String, String> loadDict(String dictGroup){
+            return dictMap().getOrDefault(dictGroup,new HashMap<>());
+            }
+    
+    private Map<String, Map<String, String>>dictMap(){
+            Map<String, Map<String, String>>map=new HashMap<>();
+            map.put("sexDict",new HashMap<>());
+            map.put("jobDict",new HashMap<>());
+            map.get("sexDict").put("1","男");
+            map.get("sexDict").put("2","女");
+            map.get("jobDict").put("1","学习委员");
+            map.get("jobDict").put("2","生活委员");
+            map.get("jobDict").put("3","宣传委员");
+            map.get("jobDict").put("4","班长");
+            map.get("jobDict").put("5","团支书");
+            map.get("jobDict").put("6","团长");
+            return map;
+            }
         }));
 ```
 
@@ -254,31 +270,31 @@ private Map<String, Map<String, String>>dictMap(){
 
 ```java
 @Test
-void trans(){
-        UserDto userDto=new UserDto(1L,"张三",2L,"1","2");
-        System.out.println("翻译前："+userDto);
-        transService.trans(userDto);
-        System.out.println("翻译后："+userDto);
-        List<UserDto> userDtoList=new ArrayList<>();
-        UserDto userDto2=new UserDto(2L,"李四",1L,"2","1");
-        UserDto userDto3=new UserDto(3L,"王五",2L,"1","3");
-        UserDto userDto4=new UserDto(4L,"赵六",3L,"2","4");
-        userDtoList.add(userDto4);
-        userDtoList.add(userDto3);
-        userDtoList.add(userDto2);
-        System.out.println("翻译前："+userDtoList);
-        transService.trans(userDtoList);
-        System.out.println("翻译后："+userDtoList);
-        }
+void trans() {
+    UserDto userDto=new UserDto(1L,"张三",2L,"1","2");
+    System.out.println("翻译前："+userDto);
+    transService.trans(userDto);
+    System.out.println("翻译后："+userDto);
+    List<UserDto> userDtoList=new ArrayList<>();
+    UserDto userDto2=new UserDto(2L,"李四",1L,"2","1");
+    UserDto userDto3=new UserDto(3L,"王五",2L,"1","3");
+    UserDto userDto4=new UserDto(4L,"赵六",3L,"2","4");
+    userDtoList.add(userDto4);
+    userDtoList.add(userDto3);
+    userDtoList.add(userDto2);
+    System.out.println("翻译前："+userDtoList);
+    transService.trans(userDtoList);
+    System.out.println("翻译后："+userDtoList);
+}
 ```
 
 结果输出
 
 ```java
 翻译前：UserDto(id=1,name=张三,sex=1,sexName=null,job=2,jobName=null,teacherId=2,teacherName=null,subjectId=null,subjectName=null)
-        翻译后：UserDto(id=1,name=张三,sex=1,sexName=男,job=2,jobName=生活委员,teacherId=2,teacherName=老师2,subjectId=2,subjectName=数学)
-        翻译前：[UserDto(id=4,name=赵六,sex=2,sexName=null,job=4,jobName=null,teacherId=3,teacherName=null,subjectId=null,subjectName=null),UserDto(id=3,name=王五,sex=1,sexName=null,job=3,jobName=null,teacherId=2,teacherName=null,subjectId=null,subjectName=null),UserDto(id=2,name=李四,sex=2,sexName=null,job=1,jobName=null,teacherId=1,teacherName=null,subjectId=null,subjectName=null)]
-        翻译后：[UserDto(id=4,name=赵六,sex=2,sexName=女,job=4,jobName=班长,teacherId=3,teacherName=老师3,subjectId=3,subjectName=英语),UserDto(id=3,name=王五,sex=1,sexName=男,job=3,jobName=宣传委员,teacherId=2,teacherName=老师2,subjectId=2,subjectName=数学),UserDto(id=2,name=李四,sex=2,sexName=女,job=1,jobName=学习委员,teacherId=1,teacherName=老师1,subjectId=1,subjectName=语文)]
+翻译后：UserDto(id=1,name=张三,sex=1,sexName=男,job=2,jobName=生活委员,teacherId=2,teacherName=老师2,subjectId=2,subjectName=数学)
+翻译前：[UserDto(id=4,name=赵六,sex=2,sexName=null,job=4,jobName=null,teacherId=3,teacherName=null,subjectId=null,subjectName=null),UserDto(id=3,name=王五,sex=1,sexName=null,job=3,jobName=null,teacherId=2,teacherName=null,subjectId=null,subjectName=null),UserDto(id=2,name=李四,sex=2,sexName=null,job=1,jobName=null,teacherId=1,teacherName=null,subjectId=null,subjectName=null)]
+翻译后：[UserDto(id=4,name=赵六,sex=2,sexName=女,job=4,jobName=班长,teacherId=3,teacherName=老师3,subjectId=3,subjectName=英语),UserDto(id=3,name=王五,sex=1,sexName=男,job=3,jobName=宣传委员,teacherId=2,teacherName=老师2,subjectId=2,subjectName=数学),UserDto(id=2,name=李四,sex=2,sexName=女,job=1,jobName=学习委员,teacherId=1,teacherName=老师1,subjectId=1,subjectName=语文)]
 ```
 
 ## 四、高级功能
@@ -296,15 +312,15 @@ void trans(){
 @Trans(using = TeacherTransRepository.class)
 public @interface TeacherTrans {
 
-  /**
-   * 需要翻译的字段
-   */
-  String trans() default "";
-
-  /**
-   * key 提取的字段
-   */
-  String key() default "";
+    /**
+    * 需要翻译的字段
+    */
+    String trans() default "";
+    
+    /**
+    * key 提取的字段
+    */
+    String key() default "";
 
 }
 
@@ -315,32 +331,32 @@ public @interface TeacherTrans {
 @Data
 public class UserDto2 {
 
-  private Long id;
-
-  private String name;
-
-  private List<Long> teacherIds;
-
-  private List<String> jobIds;
-
-  @DictTrans(trans = "jobIds", group = "jobDict")
-  private List<String> jobNames;
-
-  @TeacherTrans(trans = "teacherIds", key = "name")
-  private List<String> teacherName;
-
-  @TeacherTrans(trans = "teacherIds", key = "subjectId")
-  private List<Long> subjectIds;
-
-  @Trans(using = SubjectTransRepository.class, trans = "subjectIds", key = "name")
-  private List<String> subjectNames;
-
-  public UserDto2(Long id, String name, List<Long> teacherIds, List<String> jobIds) {
+    private Long id;
+    
+    private String name;
+    
+    private List<Long> teacherIds;
+    
+    private List<String> jobIds;
+    
+    @DictTrans(trans = "jobIds", group = "jobDict")
+    private List<String> jobNames;
+    
+    @TeacherTrans(trans = "teacherIds", key = "name")
+    private List<String> teacherName;
+    
+    @TeacherTrans(trans = "teacherIds", key = "subjectId")
+    private List<Long> subjectIds;
+    
+    @Trans(using = SubjectTransRepository.class, trans = "subjectIds", key = "name")
+    private List<String> subjectNames;
+    
+    public UserDto2(Long id, String name, List<Long> teacherIds, List<String> jobIds) {
     this.id = id;
     this.name = name;
     this.teacherIds = teacherIds;
     this.jobIds = jobIds;
-  }
+    }
 }
 
 ```
@@ -349,34 +365,34 @@ public class UserDto2 {
 
 ```java
 @Test
-void trans2(){
-        List<Long> teacherIds=new ArrayList<>();
-        teacherIds.add(1L);
-        teacherIds.add(2L);
-        List<String> jobIds=new ArrayList<>();
-        jobIds.add("1");
-        jobIds.add("2");
-        UserDto2 userDto=new UserDto2(1L,"张三",teacherIds,jobIds);
-        System.out.println("翻译前："+userDto);
-        transService.trans(userDto);
-        System.out.println("翻译后："+userDto);
-        List<UserDto2> userDtoList=new ArrayList<>();
-        UserDto2 userDto2=new UserDto2(2L,"李四",teacherIds,jobIds);
-        List<Long> teacherIds2=new ArrayList<>();
-        teacherIds2.add(3L);
-        teacherIds2.add(4L);
-        List<String> jobIds2=new ArrayList<>();
-        jobIds2.add("3");
-        jobIds2.add("4");
-        UserDto2 userDto3=new UserDto2(3L,"王五",teacherIds2,jobIds2);
-        UserDto2 userDto4=new UserDto2(4L,"赵六",teacherIds2,jobIds2);
-        userDtoList.add(userDto4);
-        userDtoList.add(userDto3);
-        userDtoList.add(userDto2);
-        System.out.println("翻译前："+userDtoList);
-        transService.trans(userDtoList);
-        System.out.println("翻译后："+userDtoList);
-        }
+void trans2() {
+    List<Long> teacherIds=new ArrayList<>();
+    teacherIds.add(1L);
+    teacherIds.add(2L);
+    List<String> jobIds=new ArrayList<>();
+    jobIds.add("1");
+    jobIds.add("2");
+    UserDto2 userDto=new UserDto2(1L,"张三",teacherIds,jobIds);
+    System.out.println("翻译前："+userDto);
+    transService.trans(userDto);
+    System.out.println("翻译后："+userDto);
+    List<UserDto2> userDtoList=new ArrayList<>();
+    UserDto2 userDto2=new UserDto2(2L,"李四",teacherIds,jobIds);
+    List<Long> teacherIds2=new ArrayList<>();
+    teacherIds2.add(3L);
+    teacherIds2.add(4L);
+    List<String> jobIds2=new ArrayList<>();
+    jobIds2.add("3");
+    jobIds2.add("4");
+    UserDto2 userDto3=new UserDto2(3L,"王五",teacherIds2,jobIds2);
+    UserDto2 userDto4=new UserDto2(4L,"赵六",teacherIds2,jobIds2);
+    userDtoList.add(userDto4);
+    userDtoList.add(userDto3);
+    userDtoList.add(userDto2);
+    System.out.println("翻译前："+userDtoList);
+    transService.trans(userDtoList);
+    System.out.println("翻译后："+userDtoList);
+}
 
 ```
 
@@ -384,9 +400,9 @@ void trans2(){
 
 ```java
 翻译前：UserDto2(id=1,name=张三,teacherIds=[1,2],jobIds=[1,2],jobNames=null,teacherName=null,subjectIds=null,subjectNames=null)
-        翻译后：UserDto2(id=1,name=张三,teacherIds=[1,2],jobIds=[1,2],jobNames=[学习委员,生活委员],teacherName=[老师1,老师2],subjectIds=[1,2],subjectNames=[语文,数学])
-        翻译前：[UserDto2(id=4,name=赵六,teacherIds=[3,4],jobIds=[3,4],jobNames=null,teacherName=null,subjectIds=null,subjectNames=null),UserDto2(id=3,name=王五,teacherIds=[3,4],jobIds=[3,4],jobNames=null,teacherName=null,subjectIds=null,subjectNames=null),UserDto2(id=2,name=李四,teacherIds=[1,2],jobIds=[1,2],jobNames=null,teacherName=null,subjectIds=null,subjectNames=null)]
-        翻译后：[UserDto2(id=4,name=赵六,teacherIds=[3,4],jobIds=[3,4],jobNames=[宣传委员,班长],teacherName=[老师3,老师4],subjectIds=[3,4],subjectNames=[英语,物理]),UserDto2(id=3,name=王五,teacherIds=[3,4],jobIds=[3,4],jobNames=[宣传委员,班长],teacherName=[老师3,老师4],subjectIds=[3,4],subjectNames=[英语,物理]),UserDto2(id=2,name=李四,teacherIds=[1,2],jobIds=[1,2],jobNames=[学习委员,生活委员],teacherName=[老师1,老师2],subjectIds=[1,2],subjectNames=[语文,数学])]
+翻译后：UserDto2(id=1,name=张三,teacherIds=[1,2],jobIds=[1,2],jobNames=[学习委员,生活委员],teacherName=[老师1,老师2],subjectIds=[1,2],subjectNames=[语文,数学])
+翻译前：[UserDto2(id=4,name=赵六,teacherIds=[3,4],jobIds=[3,4],jobNames=null,teacherName=null,subjectIds=null,subjectNames=null),UserDto2(id=3,name=王五,teacherIds=[3,4],jobIds=[3,4],jobNames=null,teacherName=null,subjectIds=null,subjectNames=null),UserDto2(id=2,name=李四,teacherIds=[1,2],jobIds=[1,2],jobNames=null,teacherName=null,subjectIds=null,subjectNames=null)]
+翻译后：[UserDto2(id=4,name=赵六,teacherIds=[3,4],jobIds=[3,4],jobNames=[宣传委员,班长],teacherName=[老师3,老师4],subjectIds=[3,4],subjectNames=[英语,物理]),UserDto2(id=3,name=王五,teacherIds=[3,4],jobIds=[3,4],jobNames=[宣传委员,班长],teacherName=[老师3,老师4],subjectIds=[3,4],subjectNames=[英语,物理]),UserDto2(id=2,name=李四,teacherIds=[1,2],jobIds=[1,2],jobNames=[学习委员,生活委员],teacherName=[老师1,老师2],subjectIds=[1,2],subjectNames=[语文,数学])]
 ```
 
 ### 2、值提取
@@ -399,19 +415,19 @@ void trans2(){
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.FIELD)
 public @interface DictTrans {
-
-
-  /**
-   * @return 需要翻译的字段
-   */
-  String trans();
-
-  /**
-   * 字典组
-   *
-   * @return 字典分组
-   */
-  String group();
+    
+    
+    /**
+    * @return 需要翻译的字段
+    */
+    String trans();
+    
+    /**
+    * 字典组
+    *
+    * @return 字典分组
+    */
+    String group();
 
 }
 
@@ -428,9 +444,9 @@ public @interface DictTrans {
 @AllArgsConstructor
 public class Result<T> {
 
-  private T data;
-
-  private String message;
+    private T data;
+    
+    private String message;
 
 }
 
@@ -440,15 +456,16 @@ public class Result<T> {
 
 ```java
 public class ResultResolver implements TransObjResolver {
-  @Override
-  public boolean support(Object obj) {
-    return obj instanceof Result;
-  }
-
-  @Override
-  public Object resolveTransObj(Object obj) {
-    return ((Result<?>) obj).getData();
-  }
+    
+    @Override
+    public boolean support(Object obj) {
+        return obj instanceof Result;
+    }
+    
+    @Override
+    public Object resolveTransObj(Object obj) {
+        return ((Result<?>) obj).getData();
+    }
 
 }
 
@@ -462,26 +479,26 @@ TransObjResolverFactory.register(new ResultResolver());
 
 ```java
 @Test
-void trans3(){
-        List<Long> teacherIds=new ArrayList<>();
-        teacherIds.add(1L);
-        teacherIds.add(2L);
-        List<String> jobIds=new ArrayList<>();
-        jobIds.add("1");
-        jobIds.add("2");
-        jobIds.add("3");
-        UserDto2 userDto=new UserDto2(1L,"张三",teacherIds,jobIds);
-        Result<UserDto2> result=new Result<>(userDto,"success");
-        System.out.println("翻译前："+result);
-        transService.trans(result);
-        System.out.println("翻译后："+result);
-        UserDto2 userDto2=new UserDto2(2L,"李四",teacherIds,jobIds);
-        Result<UserDto2> result2=new Result<>(userDto2,"success");
-        Result<Result<UserDto2>>result3=new Result<>(result2,"success");
-        System.out.println("翻译前："+result3);
-        transService.trans(result3);
-        System.out.println("翻译后："+result3);
-        }
+void trans3() {
+    List<Long> teacherIds=new ArrayList<>();
+    teacherIds.add(1L);
+    teacherIds.add(2L);
+    List<String> jobIds=new ArrayList<>();
+    jobIds.add("1");
+    jobIds.add("2");
+    jobIds.add("3");
+    UserDto2 userDto=new UserDto2(1L,"张三",teacherIds,jobIds);
+    Result<UserDto2> result=new Result<>(userDto,"success");
+    System.out.println("翻译前："+result);
+    transService.trans(result);
+    System.out.println("翻译后："+result);
+    UserDto2 userDto2=new UserDto2(2L,"李四",teacherIds,jobIds);
+    Result<UserDto2> result2=new Result<>(userDto2,"success");
+    Result<Result<UserDto2>>result3=new Result<>(result2,"success");
+    System.out.println("翻译前："+result3);
+    transService.trans(result3);
+    System.out.println("翻译后："+result3);
+}
 
 ```
 
@@ -489,14 +506,14 @@ void trans3(){
 
 ```java
 翻译前：Result(data=UserDto2(id=1,name=张三,teacherIds=[1,2],jobIds=[1,2,3],jobNames=null,teacherName=null,subjectIds=null,subjectNames=null),message=success)
-        翻译后：Result(data=UserDto2(id=1,name=张三,teacherIds=[1,2],jobIds=[1,2,3],jobNames=[学习委员,生活委员,宣传委员],teacherName=[老师1,老师2],subjectIds=[1,2],subjectNames=[语文,数学]),message=success)
-        翻译前：Result(data=Result(data=UserDto2(id=2,name=李四,teacherIds=[1,2],jobIds=[1,2,3],jobNames=null,teacherName=null,subjectIds=null,subjectNames=null),message=success),message=success)
-        翻译后：Result(data=Result(data=UserDto2(id=2,name=李四,teacherIds=[1,2],jobIds=[1,2,3],jobNames=[学习委员,生活委员,宣传委员],teacherName=[老师1,老师2],subjectIds=[1,2],subjectNames=[语文,数学]),message=success),message=success)
+翻译后：Result(data=UserDto2(id=1,name=张三,teacherIds=[1,2],jobIds=[1,2,3],jobNames=[学习委员,生活委员,宣传委员],teacherName=[老师1,老师2],subjectIds=[1,2],subjectNames=[语文,数学]),message=success)
+翻译前：Result(data=Result(data=UserDto2(id=2,name=李四,teacherIds=[1,2],jobIds=[1,2,3],jobNames=null,teacherName=null,subjectIds=null,subjectNames=null),message=success),message=success)
+翻译后：Result(data=Result(data=UserDto2(id=2,name=李四,teacherIds=[1,2],jobIds=[1,2,3],jobNames=[学习委员,生活委员,宣传委员],teacherName=[老师1,老师2],subjectIds=[1,2],subjectNames=[语文,数学]),message=success),message=success)
 ```
 
 ### 4、对象直接填充
 
-有时候我们可能需要把完整的对象填充到需要翻译的字段中，这个时候，只需要key指定#all即可，如果返回的结果是基本类型（包括String），也会直接填充。
+有时候我们可能需要把完整的对象填充到需要翻译的字段中，只需要返回类型和需要翻译的字段的类型一致，框架会自动填充。
 
 ```java
 
@@ -509,7 +526,7 @@ public class UserDto3 {
 
     private Long teacherId;
 
-    @Trans(trans = "teacherId", key = TransModel.VAL_ALL, using = TeacherTransRepository.class)
+    @Trans(trans = "teacherId", using = TeacherTransRepository.class)
     private TeacherDto teacher;
 
     @Trans(trans = "teacherId", using = TeacherTrans2Repository.class)
@@ -528,11 +545,10 @@ public class UserDto3 {
 public class TeacherTrans2Repository implements TransRepository<Long, Boolean> {
 
     @Override
-    public List<TransResult<Long, Boolean>> getTransValueList(List<Long> transValues, Annotation transAnno) {
+    public Map<Long, Boolean> getTransValueMap(List<Long> transValues, Annotation transAnno) {
         return getTeachers().stream()
                 .filter(x -> transValues.contains(x.getId()))
-                .map(x -> TransResult.of(x.getId(), x.getSubjectId() == 1))
-                .collect(Collectors.toList());
+                .collect(Collectors.toMap(TeacherDto::getId, x -> x.getSubjectId() == 1));
     }
 
     public List<TeacherDto> getTeachers() {
@@ -548,31 +564,31 @@ public class TeacherTrans2Repository implements TransRepository<Long, Boolean> {
 ```
 
 ```java
-    @Test
-    void trans4(){
-            UserDto3 userDto=new UserDto3(1L,"张三",2L);
-            System.out.println("翻译前："+userDto);
-            transService.trans(userDto);
-            System.out.println("翻译后："+userDto);
-            Assertions.assertNotNull(userDto.getTeacher());
-            Assertions.assertEquals("老师2",userDto.getTeacher().getName());
-            List<UserDto3> userDtoList=new ArrayList<>();
-        UserDto3 userDto2=new UserDto3(2L,"李四",1L);
-        UserDto3 userDto3=new UserDto3(3L,"王五",2L);
-        UserDto3 userDto4=new UserDto3(4L,"赵六",3L);
-        userDtoList.add(userDto2);
-        userDtoList.add(userDto3);
-        userDtoList.add(userDto4);
-        System.out.println("翻译前："+userDtoList);
-        transService.trans(userDtoList);
-        System.out.println("翻译后："+userDtoList);
-        Assertions.assertNotNull(userDtoList.get(0).getTeacher());
-        Assertions.assertEquals("老师1",userDtoList.get(0).getTeacher().getName());
-        Assertions.assertNotNull(userDtoList.get(1).getTeacher());
-        Assertions.assertEquals("老师2",userDtoList.get(1).getTeacher().getName());
-        Assertions.assertNotNull(userDtoList.get(2).getTeacher());
-        Assertions.assertEquals("老师3",userDtoList.get(2).getTeacher().getName());
-        }
+@Test
+void trans4() {
+    UserDto3 userDto=new UserDto3(1L,"张三",2L);
+    System.out.println("翻译前："+userDto);
+    transService.trans(userDto);
+    System.out.println("翻译后："+userDto);
+    Assertions.assertNotNull(userDto.getTeacher());
+    Assertions.assertEquals("老师2",userDto.getTeacher().getName());
+    List<UserDto3> userDtoList=new ArrayList<>();
+    UserDto3 userDto2=new UserDto3(2L,"李四",1L);
+    UserDto3 userDto3=new UserDto3(3L,"王五",2L);
+    UserDto3 userDto4=new UserDto3(4L,"赵六",3L);
+    userDtoList.add(userDto2);
+    userDtoList.add(userDto3);
+    userDtoList.add(userDto4);
+    System.out.println("翻译前："+userDtoList);
+    transService.trans(userDtoList);
+    System.out.println("翻译后："+userDtoList);
+    Assertions.assertNotNull(userDtoList.get(0).getTeacher());
+    Assertions.assertEquals("老师1",userDtoList.get(0).getTeacher().getName());
+    Assertions.assertNotNull(userDtoList.get(1).getTeacher());
+    Assertions.assertEquals("老师2",userDtoList.get(1).getTeacher().getName());
+    Assertions.assertNotNull(userDtoList.get(2).getTeacher());
+    Assertions.assertEquals("老师3",userDtoList.get(2).getTeacher().getName());
+}
 ```
 
 ### 5、与springboot集成
@@ -581,9 +597,9 @@ maven 引入
 
 ```java
 <dependency>
-<groupId>io.github.orangewest</groupId>
-<artifactId>easy-trans-spring-start</artifactId>
-<version>0.1.0</version>
+    <groupId>io.github.orangewest</groupId>
+    <artifactId>easy-trans-spring-start</artifactId>
+    <version>0.1.1</version>
 </dependency>
 ```
 
@@ -594,11 +610,12 @@ maven 引入
 ```java
 @GetMapping("/query")
 @AutoTrans
-public Result<PageData<BizDTO>>page(Query query){
-        PageData<BizDTO> page=bizService.page(query);
-
-        return new Result<PageData<BizDTO>>().ok(page);
-        }
+public Result<PageData<BizDTO>> page (Query query) {
+    
+    PageData<BizDTO> page=bizService.page(query);
+    
+    return new Result<PageData<BizDTO>>().ok(page);
+}
 
 ```
 
@@ -616,14 +633,14 @@ public Result<PageData<BizDTO>>page(Query query){
 @Trans(using = DbTransRepository.class)
 public @interface DbTrans {
 
-  String trans();
-
-  String key() default "";
-
-  /**
-   * 数据库目标class
-   */
-  Class<? extends BaseEntity> entity() default BaseEntity.class;
+    String trans();
+    
+    String key() default "";
+    
+    /**
+    * 数据库目标class
+    */
+    Class<? extends BaseEntity> entity() default BaseEntity.class;
 
 }
 
@@ -676,13 +693,13 @@ public interface TransDriver {
 @Component
 public class MybatisTransDriver implements TransDriver {
 
-  @Override
-  public List<? extends BaseEntity> findByIds(List<? extends Serializable> ids, Class<? extends BaseEntity> targetClass) {
-    try (SqlSession sqlSession = SqlHelper.sqlSession(targetClass)) {
-      BaseMapper<? extends BaseEntity> mapper = SqlHelper.getMapper(targetClass, sqlSession);
-      return mapper.selectBatchIds(ids);
+    @Override
+    public List<? extends BaseEntity> findByIds(List<? extends Serializable> ids, Class<? extends BaseEntity> targetClass) {
+        try (SqlSession sqlSession = SqlHelper.sqlSession(targetClass)) {
+          BaseMapper<? extends BaseEntity> mapper = SqlHelper.getMapper(targetClass, sqlSession);
+          return mapper.selectBatchIds(ids);
+        }
     }
-  }
 
 }
 ```

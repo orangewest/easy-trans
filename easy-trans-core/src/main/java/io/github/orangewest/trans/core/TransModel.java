@@ -17,11 +17,6 @@ public class TransModel {
     public final static String VAL_EXTRACT = "#val";
 
     /**
-     * 需要被翻译的属性值全部
-     */
-    public final static String VAL_ALL = "#all";
-
-    /**
      * 需要被翻译的属性
      */
     private final TransFieldMeta transFieldMeta;
@@ -41,9 +36,10 @@ public class TransModel {
      */
     private final boolean isMultiple;
 
+    /**
+     * 是否是值提取
+     */
     private final boolean isValExtract;
-
-    private final boolean isFillAll;
 
     public TransModel(Object obj, TransFieldMeta field) {
         this.transFieldMeta = field;
@@ -53,13 +49,11 @@ public class TransModel {
         this.isMultiple = (Iterable.class).isAssignableFrom(type) || type.isArray();
         this.transVal = ReflectUtils.getFieldValue(this.obj, transField);
         this.isValExtract = VAL_EXTRACT.equals(this.transFieldMeta.getKey());
-        this.isFillAll = VAL_ALL.equals(this.transFieldMeta.getKey());
     }
 
-    public void fillValue(List<TransResult<Object, Object>> transValueList) {
+    public void fillValue(Map<Object, Object> transValueMap) {
         Object objValue = null;
-        Map<Object, Object> valMap = transValueList.stream().collect(Collectors.toMap(TransResult::getTransVal, TransResult::getTransResult));
-        boolean isFillAll = this.isFillAll || transValueList.get(0).isPrimitiveResult();
+        boolean isFillAll = transValueMap.values().stream().anyMatch(transValue -> transValue.getClass().isAssignableFrom(this.transFieldMeta.getField().getType()));
         if (this.isMultiple) {
             List<Object> multipleTransVal = getMultipleTransVal();
             objValue = getObjValue(multipleTransVal);
@@ -67,10 +61,10 @@ public class TransModel {
                 @SuppressWarnings("unchecked")
                 Collection<Object> objCollection = (Collection<Object>) objValue;
                 if (isFillAll) {
-                    multipleTransVal.forEach(val -> objCollection.add(valMap.get(val)));
+                    multipleTransVal.forEach(val -> objCollection.add(transValueMap.get(val)));
                 } else {
-                    Map<Object, ? extends Map<?, ?>> objValMap = transValueList.stream()
-                            .collect(Collectors.toMap(TransResult::getTransVal, x -> ReflectUtils.beanToMap(x.getTransResult())));
+                    Map<Object, ? extends Map<?, ?>> objValMap = transValueMap.entrySet().stream()
+                            .collect(Collectors.toMap(Map.Entry::getKey, x -> ReflectUtils.beanToMap(x.getValue())));
                     if (this.isValExtract) {
                         multipleTransVal.forEach(val -> {
                             for (Map<?, ?> objMap : objValMap.values()) {
@@ -90,11 +84,11 @@ public class TransModel {
                 Object[] objArray = (Object[]) objValue;
                 if (isFillAll) {
                     for (int i = 0; i < multipleTransVal.size(); i++) {
-                        objArray[i] = valMap.get(multipleTransVal.get(i));
+                        objArray[i] = transValueMap.get(multipleTransVal.get(i));
                     }
                 } else {
-                    Map<Object, ? extends Map<?, ?>> objValMap = transValueList.stream()
-                            .collect(Collectors.toMap(TransResult::getTransVal, x -> ReflectUtils.beanToMap(x.getTransResult())));
+                    Map<Object, ? extends Map<?, ?>> objValMap = transValueMap.entrySet().stream()
+                            .collect(Collectors.toMap(Map.Entry::getKey, x -> ReflectUtils.beanToMap(x.getValue())));
                     if (this.isValExtract) {
                         for (int i = 0; i < multipleTransVal.size(); i++) {
                             for (Map<?, ?> objMap : objValMap.values()) {
@@ -113,15 +107,15 @@ public class TransModel {
             }
         } else {
             if (isFillAll) {
-                objValue = valMap.get(this.transVal);
+                objValue = transValueMap.get(this.transVal);
             } else {
                 if (this.isValExtract) {
-                    for (Object value : valMap.values()) {
+                    for (Object value : transValueMap.values()) {
                         Map<?, ?> objValMap = ReflectUtils.beanToMap(value);
                         objValue = objValMap.get(this.transVal);
                     }
                 } else {
-                    Map<?, ?> objValMap = ReflectUtils.beanToMap(valMap.get(this.transVal));
+                    Map<?, ?> objValMap = ReflectUtils.beanToMap(transValueMap.get(this.transVal));
                     objValue = objValMap.get(this.transFieldMeta.getKey());
                 }
             }

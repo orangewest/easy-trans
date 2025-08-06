@@ -3,7 +3,6 @@ package io.github.orangewest.trans.service;
 import io.github.orangewest.trans.core.TransClassMeta;
 import io.github.orangewest.trans.core.TransFieldMeta;
 import io.github.orangewest.trans.core.TransModel;
-import io.github.orangewest.trans.core.TransResult;
 import io.github.orangewest.trans.manager.TransClassMetaCacheManager;
 import io.github.orangewest.trans.repository.TransRepository;
 import io.github.orangewest.trans.repository.TransRepositoryFactory;
@@ -149,9 +148,9 @@ public class TransService {
     private void doTrans(TransRepository<Object, Object> transRepository, List<TransModel> transModels) {
         List<Object> transValues = transModels.stream().map(TransModel::getMultipleTransVal).flatMap(Collection::stream).distinct().collect(Collectors.toList());
         Annotation transAnno = transModels.get(0).getTransField().getTransAnno();
-        List<TransResult<Object, Object>> transValueList = transRepository.getTransValueList(transValues, transAnno);
-        if (CollectionUtils.isNotEmpty(transValueList)) {
-            transModels.forEach(transModel -> transModel.fillValue(transValueList));
+        Map<Object, Object> transValueMap = transRepository.getTransValueMap(transValues, transAnno);
+        if (CollectionUtils.isNotEmpty(transValueMap)) {
+            transModels.forEach(transModel -> transModel.fillValue(transValueMap));
         }
     }
 

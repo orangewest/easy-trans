@@ -1,21 +1,20 @@
 package io.github.orangewest.trans.repository;
 
-import io.github.orangewest.trans.core.TransResult;
 import io.github.orangewest.trans.dto.TeacherDto;
 
 import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 public class TeacherTrans2Repository implements TransRepository<Long, Boolean> {
 
     @Override
-    public List<TransResult<Long, Boolean>> getTransValueList(List<Long> transValues, Annotation transAnno) {
+    public Map<Long, Boolean> getTransValueMap(List<Long> transValues, Annotation transAnno) {
         return getTeachers().stream()
                 .filter(x -> transValues.contains(x.getId()))
-                .map(x -> TransResult.of(x.getId(), x.getSubjectId() == 1))
-                .collect(Collectors.toList());
+                .collect(Collectors.toMap(TeacherDto::getId, x -> x.getSubjectId() == 1));
     }
 
     public List<TeacherDto> getTeachers() {

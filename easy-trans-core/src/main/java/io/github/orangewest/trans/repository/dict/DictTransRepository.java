@@ -1,7 +1,6 @@
 package io.github.orangewest.trans.repository.dict;
 
 import io.github.orangewest.trans.annotation.DictTrans;
-import io.github.orangewest.trans.core.TransResult;
 import io.github.orangewest.trans.repository.TransRepository;
 
 import java.lang.annotation.Annotation;
@@ -20,15 +19,14 @@ public class DictTransRepository implements TransRepository<String, Map<String, 
     }
 
     @Override
-    public List<TransResult<String, Map<String, String>>> getTransValueList(List<String> transValues, Annotation transAnno) {
+    public Map<String, Map<String, String>> getTransValueMap(List<String> transValues, Annotation transAnno) {
         if (dictLoader != null && transAnno instanceof DictTrans) {
             DictTrans dictTrans = (DictTrans) transAnno;
             String group = dictTrans.group();
             return Stream.of(group)
-                    .map(x -> TransResult.of(x, dictLoader.loadDict(x)))
-                    .collect(Collectors.toList());
+                    .collect(Collectors.toMap(x -> x, dictLoader::loadDict));
         }
-        return Collections.emptyList();
+        return Collections.emptyMap();
     }
-
+    
 }

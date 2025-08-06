@@ -1,7 +1,6 @@
 package io.github.orangewest.trans.dto;
 
 import io.github.orangewest.trans.annotation.Trans;
-import io.github.orangewest.trans.core.TransModel;
 import io.github.orangewest.trans.repository.TeacherTrans2Repository;
 import io.github.orangewest.trans.repository.TeacherTransRepository;
 import lombok.Data;
@@ -15,7 +14,7 @@ public class UserDto3 {
 
     private Long teacherId;
 
-    @Trans(trans = "teacherId", key = TransModel.VAL_ALL, using = TeacherTransRepository.class)
+    @Trans(trans = "teacherId", using = TeacherTransRepository.class)
     private TeacherDto teacher;
 
     @Trans(trans = "teacherId", using = TeacherTrans2Repository.class)
