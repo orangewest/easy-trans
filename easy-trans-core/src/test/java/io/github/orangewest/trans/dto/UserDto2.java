@@ -1,8 +1,9 @@
 package io.github.orangewest.trans.dto;
 
-import io.github.orangewest.trans.TeacherTrans;
-import io.github.orangewest.trans.annotation.DictTrans;
+import io.github.orangewest.trans.TeacherTransRepo;
+import io.github.orangewest.trans.annotation.DictTransRepo;
 import io.github.orangewest.trans.annotation.Trans;
+import io.github.orangewest.trans.annotation.TransRepo;
 import io.github.orangewest.trans.repository.SubjectTransRepository;
 import lombok.Data;
 
@@ -15,20 +16,24 @@ public class UserDto2 {
 
     private String name;
 
+
+    @TeacherTransRepo
     private List<Long> teacherIds;
 
+    @DictTransRepo(group = "jobDict")
     private List<String> jobIds;
 
-    @DictTrans(trans = "jobIds", group = "jobDict")
+    @Trans(trans = "jobIds")
     private List<String> jobNames;
 
-    @TeacherTrans(trans = "teacherIds", key = "name")
+    @Trans(trans = "teacherIds", key = "name")
     private List<String> teacherName;
 
-    @TeacherTrans(trans = "teacherIds", key = "subjectId")
+    @Trans(trans = "teacherIds", key = "subjectId")
+    @TransRepo(using = SubjectTransRepository.class)
     private List<Long> subjectIds;
 
-    @Trans(using = SubjectTransRepository.class, trans = "subjectIds", key = "name")
+    @Trans(trans = "subjectIds", key = "name")
     private List<String> subjectNames;
 
     public UserDto2(Long id, String name, List<Long> teacherIds, List<String> jobIds) {

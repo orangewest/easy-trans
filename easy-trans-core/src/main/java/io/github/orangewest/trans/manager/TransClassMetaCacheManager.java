@@ -20,9 +20,7 @@ public class TransClassMetaCacheManager implements Serializable {
         TransClassMeta temp = CACHE.get(clazz.getName());
         if (null == temp) {
             temp = new TransClassMeta(clazz);
-            if (temp.needTrans()) {
-                CACHE.put(clazz.getName(), temp);
-            }
+            CACHE.put(clazz.getName(), temp);
         }
         return temp;
     }

@@ -11,22 +11,22 @@ import java.lang.annotation.Target;
  * 翻译注解
  */
 @Retention(RetentionPolicy.RUNTIME)
-@Target({ElementType.FIELD, ElementType.ANNOTATION_TYPE})
+@Target({ElementType.FIELD})
 public @interface Trans {
 
     /**
-     * @return 需要翻译的字段
+     * @return 需要获取数据的仓库（或字段）
      */
-    String trans() default "";
+    String trans();
 
     /**
-     * @return 提取的字段
+     * @return 从仓库中提取的字段
      */
     String key() default "";
 
     /**
      * @return 翻译数据获取仓库
      */
-    Class<? extends TransRepository<?, ?>> using();
+    Class<? extends TransRepository<?, ?>>[] using() default {};
 
 }

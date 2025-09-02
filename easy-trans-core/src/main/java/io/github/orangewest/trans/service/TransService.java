@@ -3,6 +3,7 @@ package io.github.orangewest.trans.service;
 import io.github.orangewest.trans.core.TransClassMeta;
 import io.github.orangewest.trans.core.TransFieldMeta;
 import io.github.orangewest.trans.core.TransModel;
+import io.github.orangewest.trans.core.TransRepoMeta;
 import io.github.orangewest.trans.manager.TransClassMetaCacheManager;
 import io.github.orangewest.trans.repository.TransRepository;
 import io.github.orangewest.trans.repository.TransRepositoryFactory;
@@ -10,7 +11,6 @@ import io.github.orangewest.trans.resolver.TransObjResolver;
 import io.github.orangewest.trans.resolver.TransObjResolverFactory;
 import io.github.orangewest.trans.util.CollectionUtils;
 
-import java.lang.annotation.Annotation;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -85,7 +85,7 @@ public class TransService {
     }
 
     private void doTrans(List<Object> objList, List<TransFieldMeta> transFieldMetaList) {
-        Map<? extends Class<? extends TransRepository<?, ?>>, List<TransFieldMeta>> listMap = transFieldMetaList.stream().collect(Collectors.groupingBy(TransFieldMeta::getRepository));
+        Map<TransRepoMeta, List<TransFieldMeta>> listMap = transFieldMetaList.stream().collect(Collectors.groupingBy(TransFieldMeta::getTransRepoMeta));
         if (listMap.size() > 1) {
             CompletableFuture.allOf(
                             listMap.entrySet()
@@ -95,24 +95,25 @@ public class TransService {
                                     .toArray(CompletableFuture[]::new))
                     .join();
         } else {
-            listMap.forEach((transClass, transFields) -> doTrans(objList, transClass, transFields));
+            listMap.forEach((transRepoMeta, transFields) -> doTrans(objList, transRepoMeta, transFields));
         }
     }
 
-    private void doTrans(List<Object> objList, Class<? extends TransRepository<?, ?>> transClass, List<TransFieldMeta> transFields) {
-        TransRepository<Object, Object> transRepository = TransRepositoryFactory.getTransRepository(transClass);
+    private void doTrans(List<Object> objList, TransRepoMeta transRepoMeta, List<TransFieldMeta> transFields) {
+        // 获取翻译仓库
+        TransRepository<Object, Object> transRepository = TransRepositoryFactory.getTransRepository(transRepoMeta.getRepository());
         if (transRepository == null) {
             return;
         }
-        Map<String, List<TransModel>> toTransMap = getToTransMap(objList, transFields);
-        if (CollectionUtils.isNotEmpty(toTransMap)) {
-            doTrans_0(transRepository, toTransMap);
+        List<TransModel> needTransList = toNeedTransList(objList, transFields);
+        if (CollectionUtils.isNotEmpty(needTransList)) {
+            doTrans_0(transRepository, transRepoMeta, needTransList);
         }
-        transFields.forEach(transField -> {
+        for (TransFieldMeta transField : transFields) {
             if (CollectionUtils.isNotEmpty(transField.getChildren())) {
                 doTrans(objList, transField.getChildren());
             }
-        });
+        }
     }
 
     /**
@@ -122,33 +123,17 @@ public class TransService {
      * @param toTransList 需要被翻译的属性
      * @return 需要被翻译的集合Map<trans, List < TransModel>>
      */
-    private Map<String, List<TransModel>> getToTransMap(List<Object> objList, List<TransFieldMeta> toTransList) {
+    private List<TransModel> toNeedTransList(List<Object> objList, List<TransFieldMeta> toTransList) {
         return toTransList.stream()
                 .flatMap(x -> objList.stream().map(o -> new TransModel(o, x)))
                 .filter(TransModel::needTrans)
-                .collect(Collectors.groupingBy(x -> x.getTransField().getTrans()));
+                .collect(Collectors.toList());
     }
+    
 
-    private void doTrans_0(TransRepository<Object, Object> transRepository, Map<String, List<TransModel>> toTransMap) {
-        //分组查询
-        if (toTransMap.size() > 1) {
-            //说明有多个实体，异步查询
-            CompletableFuture<?>[] futures = toTransMap.values()
-                    .stream()
-                    .map(transModels -> CompletableFuture.runAsync(() -> doTrans(transRepository, transModels), executor))
-                    .toArray(CompletableFuture[]::new);
-            CompletableFuture.allOf(futures).join();
-
-        } else {
-            //直接查询
-            toTransMap.values().forEach(transModels -> doTrans(transRepository, transModels));
-        }
-    }
-
-    private void doTrans(TransRepository<Object, Object> transRepository, List<TransModel> transModels) {
+    private void doTrans_0(TransRepository<Object, Object> transRepository, TransRepoMeta transRepoMeta, List<TransModel> transModels) {
         List<Object> transValues = transModels.stream().map(TransModel::getMultipleTransVal).flatMap(Collection::stream).distinct().collect(Collectors.toList());
-        Annotation transAnno = transModels.get(0).getTransField().getTransAnno();
-        Map<Object, Object> transValueMap = transRepository.getTransValueMap(transValues, transAnno);
+        Map<Object, Object> transValueMap = transRepository.getTransValueMap(transValues, transRepoMeta.getRepoAnno());
         if (CollectionUtils.isNotEmpty(transValueMap)) {
             transModels.forEach(transModel -> transModel.fillValue(transValueMap));
         }

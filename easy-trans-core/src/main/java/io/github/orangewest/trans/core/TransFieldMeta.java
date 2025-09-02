@@ -1,22 +1,16 @@
 package io.github.orangewest.trans.core;
 
-import io.github.orangewest.trans.repository.TransRepository;
+import io.github.orangewest.trans.util.ReflectUtils;
 
-import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.util.List;
 
 public class TransFieldMeta {
 
     /**
-     * 需要被翻译的属性名称
+     * 翻译仓库信息
      */
-    private final String trans;
-
-    /**
-     * 需要被翻译的属性
-     */
-    private final Field transField;
+    private final TransRepoMeta transRepoMeta;
 
     /**
      * 需要翻译的属性
@@ -24,37 +18,26 @@ public class TransFieldMeta {
     private final Field field;
 
     /**
+     * 属性类型
+     */
+    private final Class<?> fieldType;
+
+    /**
      * 提取字段的key
      */
     private final String key;
-
-    private final Annotation transAnno;
-
-    /**
-     * 翻译仓库
-     */
-    private final Class<? extends TransRepository<?, ?>> repository;
 
     /**
      * 子属性
      */
     private List<TransFieldMeta> children;
 
-    public TransFieldMeta(Field field, Field transField, String key, Class<? extends TransRepository<?, ?>> repository, Annotation transAnno) {
+    public TransFieldMeta(Field field, String key, TransRepoMeta transRepoMeta) {
         this.field = field;
-        this.transField = transField;
-        this.trans = transField.getName();
         this.key = key;
-        this.repository = repository;
-        this.transAnno = transAnno;
-    }
-
-    public String getTrans() {
-        return trans;
-    }
-
-    public Field getTransField() {
-        return transField;
+        this.transRepoMeta = transRepoMeta;
+        this.fieldType = transRepoMeta.isMultiple() ?
+                ReflectUtils.getFieldParameterizedType(field) : ReflectUtils.getWrapperClass(field.getType());
     }
 
     public Field getField() {
@@ -65,10 +48,6 @@ public class TransFieldMeta {
         return key;
     }
 
-    public Class<? extends TransRepository<?, ?>> getRepository() {
-        return repository;
-    }
-
     public List<TransFieldMeta> getChildren() {
         return children;
     }
@@ -77,8 +56,13 @@ public class TransFieldMeta {
         this.children = children;
     }
 
-    public Annotation getTransAnno() {
-        return transAnno;
+    public TransRepoMeta getTransRepoMeta() {
+        return transRepoMeta;
     }
+
+    public Class<?> getFieldType() {
+        return fieldType;
+    }
+
 
 }

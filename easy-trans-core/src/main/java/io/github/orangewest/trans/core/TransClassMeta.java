@@ -1,18 +1,17 @@
 package io.github.orangewest.trans.core;
 
 import io.github.orangewest.trans.annotation.Trans;
+import io.github.orangewest.trans.annotation.TransRepo;
 import io.github.orangewest.trans.repository.TransRepository;
 import io.github.orangewest.trans.util.ReflectUtils;
 import io.github.orangewest.trans.util.StringUtils;
 
 import java.io.Serializable;
 import java.lang.annotation.Annotation;
+import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import static java.util.stream.Collectors.toList;
@@ -28,8 +27,11 @@ public class TransClassMeta implements Serializable {
 
     private List<TransFieldMeta> transFieldMetaList = new ArrayList<>();
 
+    private final Map<String, TransRepoMeta> transRepoMetaMap = new HashMap<>();
+
     public TransClassMeta(Class<?> clazz) {
         this.clazz = clazz;
+        parseTransRepo();
         parseTransField();
     }
 
@@ -45,68 +47,98 @@ public class TransClassMeta implements Serializable {
     private void parseTransField() {
         List<Field> declaredFields = ReflectUtils.getAllField(this.clazz);
         Map<String, Field> fieldNameMap = declaredFields.stream().collect(Collectors.toMap(Field::getName, x -> x, (o, n) -> o));
-        int mod;
         List<TransFieldMeta> transFieldMetas = new ArrayList<>();
         // 循环遍历所有的属性进行判断
         for (Field field : declaredFields) {
-            mod = field.getModifiers();
-            // 如果是 static, final, volatile, transient 的字段，则直接跳过
-            if (Modifier.isStatic(mod) || Modifier.isFinal(mod)
-                    || Modifier.isVolatile(mod) || Modifier.isTransient(mod)) {
+            int mod = field.getModifiers();
+            // 如果是 static, final, transient 的字段，则直接跳过
+            if (Modifier.isStatic(mod) || Modifier.isFinal(mod) || Modifier.isTransient(mod)) {
                 continue;
             }
-
             Trans transAnno = field.getAnnotation(Trans.class);
-            String trans = null;
-            String key = null;
-            Class<? extends TransRepository<?, ?>> repository = null;
-            Annotation transAnnotation = transAnno;
             if (transAnno == null) {
-                Annotation[] annotations = field.getDeclaredAnnotations();
-                for (Annotation annotation : annotations) {
-                    Class<? extends Annotation> annotationType = annotation.annotationType();
-                    transAnno = annotationType.getAnnotation(Trans.class);
-                    if (transAnno != null) {
-                        repository = transAnno.using();
-                        trans = StringUtils.isNotEmpty(transAnno.trans()) ? transAnno.trans() : (String) ReflectUtils.invokeAnnotation(annotationType, annotation, "trans");
-                        key = StringUtils.isNotEmpty(transAnno.key()) ? transAnno.key() : (String) ReflectUtils.invokeAnnotation(annotationType, annotation, "key");
-                        transAnnotation = annotation;
-                        break;
-                    }
-                }
-            } else {
-                trans = transAnno.trans();
-                key = transAnno.key();
-                repository = transAnno.using();
-            }
-            if (StringUtils.isEmpty(trans)) {
                 continue;
             }
-            if (!fieldNameMap.containsKey(trans)) {
+            String trans = transAnno.trans();
+            String key = transAnno.key();
+            Class<? extends TransRepository<?, ?>>[] usingArray = transAnno.using();
+            if (usingArray.length > 0) {
+                Field transField = fieldNameMap.get(trans);
+                if (transField == null) {
+                    continue;
+                }
+                Class<? extends TransRepository<?, ?>> using = usingArray[0];
+                trans = using.getName() + "#" + trans;
+                transRepoMetaMap.putIfAbsent(trans, new TransRepoMeta(transAnno.trans(), transField, null, using));
+            }
+            if (!transRepoMetaMap.containsKey(trans)) {
                 continue;
             }
             if (StringUtils.isEmpty(key)) {
                 key = field.getName();
             }
-            transFieldMetas.add(new TransFieldMeta(field, fieldNameMap.get(trans), key, repository, transAnnotation));
+            transFieldMetas.add(new TransFieldMeta(field, key, transRepoMetaMap.get(trans)));
         }
         this.transFieldMetaList = buildTransTree(transFieldMetas);
+    }
+
+    private void parseTransRepo() {
+        Map<String, TransRepoMeta> transRepoMetaMap = parseTransRepoMetas(this.clazz);
+        List<Field> declaredFields = ReflectUtils.getAllField(this.clazz);
+        for (Field field : declaredFields) {
+            int mod = field.getModifiers();
+            // 如果是 static, final, transient 的字段，则直接跳过
+            if (Modifier.isStatic(mod) || Modifier.isFinal(mod) || Modifier.isTransient(mod)) {
+                continue;
+            }
+            // 获取TransRepo注解
+            transRepoMetaMap.putAll(parseTransRepoMetas(field));
+        }
+        this.transRepoMetaMap.putAll(transRepoMetaMap);
+    }
+
+    private Map<String, TransRepoMeta> parseTransRepoMetas(AnnotatedElement annotatedElement) {
+        Field field = null;
+        if (annotatedElement instanceof Field) {
+            field = (Field) annotatedElement;
+        }
+        Map<String, TransRepoMeta> transRepoMetas = new HashMap<>();
+        TransRepo[] transRepos = annotatedElement.getDeclaredAnnotationsByType(TransRepo.class);
+        for (TransRepo transRepo : transRepos) {
+            transRepoMetas.putIfAbsent(generateRepoName(transRepo.name(), field), new TransRepoMeta(transRepo.name(), field, transRepo, transRepo.using()));
+        }
+        for (Annotation declaredAnnotation : annotatedElement.getDeclaredAnnotations()) {
+            Class<? extends Annotation> annotationType = declaredAnnotation.annotationType();
+            transRepos = annotationType.getDeclaredAnnotationsByType(TransRepo.class);
+            for (TransRepo transRepo : transRepos) {
+                String repoName = StringUtils.isNotEmpty(transRepo.name()) ? transRepo.name() : (String) ReflectUtils.invokeAnnotation(annotationType, declaredAnnotation, "name");
+                transRepoMetas.putIfAbsent(generateRepoName(repoName, field), new TransRepoMeta(repoName, field, declaredAnnotation, transRepo.using()));
+            }
+        }
+        return transRepoMetas;
+    }
+
+    private String generateRepoName(String repoName, Field field) {
+        if (StringUtils.isEmpty(repoName) && field != null) {
+            repoName = field.getName();
+        }
+        return repoName;
     }
 
     /**
      * 构建翻译树
      */
     private List<TransFieldMeta> buildTransTree(List<TransFieldMeta> transFieldMetas) {
-        Map<String, List<TransFieldMeta>> tempMap = transFieldMetas.stream().collect(Collectors.groupingBy(TransFieldMeta::getTrans));
+        Map<String, List<TransFieldMeta>> tempMap = transFieldMetas.stream().collect(Collectors.groupingBy(x -> x.getTransRepoMeta().getRepoName()));
         Map<String, List<TransFieldMeta>> nameMap = transFieldMetas.stream().collect(Collectors.groupingBy(x -> x.getField().getName()));
 
         return transFieldMetas.stream()
-                .filter(m -> !nameMap.containsKey(m.getTrans()))
+                .filter(m -> !nameMap.containsKey(m.getTransRepoMeta().getRepoName()))
                 .peek(m -> findChildren(Collections.singletonList(m), tempMap))
                 .collect(toList());
     }
 
-    public static void findChildren(List<TransFieldMeta> root, Map<String, List<TransFieldMeta>> tempMap) {
+    private void findChildren(List<TransFieldMeta> root, Map<String, List<TransFieldMeta>> tempMap) {
         root.stream()
                 .filter(x -> tempMap.containsKey(x.getField().getName()))
                 .forEach(x -> {
