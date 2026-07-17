@@ -13,7 +13,7 @@ class TransClassMetaTest {
         TransClassMeta transClassMeta = new TransClassMeta(UserDto.class);
         Assertions.assertTrue(transClassMeta.needTrans());
         List<TransFieldMeta> transFieldMeta = transClassMeta.getTransFieldList();
-        Assertions.assertEquals(4, transFieldMeta.size());
+        Assertions.assertEquals(5, transFieldMeta.size());
     }
 
 

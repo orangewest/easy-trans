@@ -3,15 +3,19 @@ package io.github.orangewest.trans.service;
 import io.github.orangewest.trans.core.TransClassMeta;
 import io.github.orangewest.trans.core.TransFieldMeta;
 import io.github.orangewest.trans.core.TransModel;
+import io.github.orangewest.trans.core.TransRepoMeta;
+import io.github.orangewest.trans.exception.TransException;
 import io.github.orangewest.trans.manager.TransClassMetaCacheManager;
+import io.github.orangewest.trans.metrics.TransMetricsCollector;
 import io.github.orangewest.trans.repository.TransRepository;
 import io.github.orangewest.trans.repository.TransRepositoryFactory;
 import io.github.orangewest.trans.resolver.TransObjResolver;
 import io.github.orangewest.trans.resolver.TransObjResolverFactory;
 import io.github.orangewest.trans.util.CollectionUtils;
 
-import java.lang.annotation.Annotation;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -42,7 +46,7 @@ public class TransService {
      */
     public boolean trans(Object obj) {
         if (!isInit) {
-            return false;
+            throw new TransException("TransService has not been initialized, call init() before invoking trans().");
         }
         obj = resolveObj(obj);
         if (obj == null) {
@@ -56,12 +60,21 @@ public class TransService {
         if (objClass.getName().startsWith("java.")) {
             return false;
         }
-        TransClassMeta info = TransClassMetaCacheManager.getTransClassMeta(objClass);
-        if (!info.needTrans()) {
-            return false;
+        long start = System.nanoTime();
+        boolean success = true;
+        try {
+            TransClassMeta info = TransClassMetaCacheManager.getTransClassMeta(objClass);
+            if (!info.needTrans()) {
+                return false;
+            }
+            doTrans(objList, info.getTransFieldList());
+            return true;
+        } catch (Throwable t) {
+            success = false;
+            throw t;
+        } finally {
+            TransMetricsCollector.get().recordTranslate(System.nanoTime() - start, success);
         }
-        doTrans(objList, info.getTransFieldList());
-        return true;
     }
 
     private Object resolveObj(Object obj) {
@@ -85,34 +98,57 @@ public class TransService {
     }
 
     private void doTrans(List<Object> objList, List<TransFieldMeta> transFieldMetaList) {
-        Map<? extends Class<? extends TransRepository<?, ?>>, List<TransFieldMeta>> listMap = transFieldMetaList.stream().collect(Collectors.groupingBy(TransFieldMeta::getRepository));
+        Map<TransRepoMeta, List<TransFieldMeta>> listMap = transFieldMetaList.stream().collect(Collectors.groupingBy(TransFieldMeta::getTransRepoMeta));
         if (listMap.size() > 1) {
+            List<Throwable> errors = Collections.synchronizedList(new ArrayList<>());
             CompletableFuture.allOf(
                             listMap.entrySet()
                                     .stream()
-                                    .map(entry -> CompletableFuture.runAsync(() ->
-                                            doTrans(objList, entry.getKey(), entry.getValue()), executor))
+                                    .map(entry -> CompletableFuture.runAsync(() -> {
+                                        try {
+                                            doTrans(objList, entry.getKey(), entry.getValue());
+                                        } catch (Throwable t) {
+                                            errors.add(t);
+                                        }
+                                    }, executor))
                                     .toArray(CompletableFuture[]::new))
                     .join();
+            if (!errors.isEmpty()) {
+                Throwable cause = errors.get(0);
+                throw new TransException("Translation failed: " + cause.getMessage(), cause);
+            }
         } else {
-            listMap.forEach((transClass, transFields) -> doTrans(objList, transClass, transFields));
+            listMap.forEach((transRepoMeta, transFields) -> doTrans(objList, transRepoMeta, transFields));
         }
     }
 
-    private void doTrans(List<Object> objList, Class<? extends TransRepository<?, ?>> transClass, List<TransFieldMeta> transFields) {
-        TransRepository<Object, Object> transRepository = TransRepositoryFactory.getTransRepository(transClass);
+    private void doTrans(List<Object> objList, TransRepoMeta transRepoMeta, List<TransFieldMeta> transFields) {
+        // 获取翻译仓库
+        TransRepository<Object, Object> transRepository = TransRepositoryFactory.getTransRepository(transRepoMeta.getRepository());
         if (transRepository == null) {
-            return;
+            throw new TransException("TransRepository is not registered: "
+                    + (transRepoMeta.getRepository() == null ? "null" : transRepoMeta.getRepository().getName())
+                    + ". Register it via TransRepositoryFactory.register(...) or mark it as a @Component in Spring.");
         }
-        Map<String, List<TransModel>> toTransMap = getToTransMap(objList, transFields);
-        if (CollectionUtils.isNotEmpty(toTransMap)) {
-            doTrans_0(transRepository, toTransMap);
+        List<TransModel> needTransList = toNeedTransList(objList, transFields);
+        if (CollectionUtils.isNotEmpty(needTransList)) {
+            long start = System.nanoTime();
+            boolean success = true;
+            try {
+                doTrans_0(transRepository, transRepoMeta, needTransList);
+            } catch (Throwable t) {
+                success = false;
+                throw t;
+            } finally {
+                TransMetricsCollector.get().recordRepository(
+                        transRepoMeta.getRepoName(), System.nanoTime() - start, success);
+            }
         }
-        transFields.forEach(transField -> {
+        for (TransFieldMeta transField : transFields) {
             if (CollectionUtils.isNotEmpty(transField.getChildren())) {
                 doTrans(objList, transField.getChildren());
             }
-        });
+        }
     }
 
     /**
@@ -122,33 +158,17 @@ public class TransService {
      * @param toTransList 需要被翻译的属性
      * @return 需要被翻译的集合Map<trans, List < TransModel>>
      */
-    private Map<String, List<TransModel>> getToTransMap(List<Object> objList, List<TransFieldMeta> toTransList) {
+    private List<TransModel> toNeedTransList(List<Object> objList, List<TransFieldMeta> toTransList) {
         return toTransList.stream()
                 .flatMap(x -> objList.stream().map(o -> new TransModel(o, x)))
                 .filter(TransModel::needTrans)
-                .collect(Collectors.groupingBy(x -> x.getTransField().getTrans()));
+                .collect(Collectors.toList());
     }
+    
 
-    private void doTrans_0(TransRepository<Object, Object> transRepository, Map<String, List<TransModel>> toTransMap) {
-        //分组查询
-        if (toTransMap.size() > 1) {
-            //说明有多个实体，异步查询
-            CompletableFuture<?>[] futures = toTransMap.values()
-                    .stream()
-                    .map(transModels -> CompletableFuture.runAsync(() -> doTrans(transRepository, transModels), executor))
-                    .toArray(CompletableFuture[]::new);
-            CompletableFuture.allOf(futures).join();
-
-        } else {
-            //直接查询
-            toTransMap.values().forEach(transModels -> doTrans(transRepository, transModels));
-        }
-    }
-
-    private void doTrans(TransRepository<Object, Object> transRepository, List<TransModel> transModels) {
+    private void doTrans_0(TransRepository<Object, Object> transRepository, TransRepoMeta transRepoMeta, List<TransModel> transModels) {
         List<Object> transValues = transModels.stream().map(TransModel::getMultipleTransVal).flatMap(Collection::stream).distinct().collect(Collectors.toList());
-        Annotation transAnno = transModels.get(0).getTransField().getTransAnno();
-        Map<Object, Object> transValueMap = transRepository.getTransValueMap(transValues, transAnno);
+        Map<Object, Object> transValueMap = transRepository.getTransValueMap(transValues, transRepoMeta.getRepoAnno());
         if (CollectionUtils.isNotEmpty(transValueMap)) {
             transModels.forEach(transModel -> transModel.fillValue(transValueMap));
         }

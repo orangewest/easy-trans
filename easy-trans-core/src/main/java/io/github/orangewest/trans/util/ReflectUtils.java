@@ -4,12 +4,15 @@ package io.github.orangewest.trans.util;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.AccessibleObject;
 import java.lang.reflect.Field;
+import java.lang.reflect.ParameterizedType;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class ReflectUtils {
 
     public static final Map<Class<?>, Class<?>> WRAPPER_PRIMITIVE_MAP = new ConcurrentHashMap<>(8);
+
+    public static final Map<Class<?>, Class<?>> PRIMITIVE_WRAPPER_MAP = new ConcurrentHashMap<>(8);
 
     static {
         WRAPPER_PRIMITIVE_MAP.put(Boolean.class, boolean.class);
@@ -20,6 +23,9 @@ public class ReflectUtils {
         WRAPPER_PRIMITIVE_MAP.put(Integer.class, int.class);
         WRAPPER_PRIMITIVE_MAP.put(Long.class, long.class);
         WRAPPER_PRIMITIVE_MAP.put(Short.class, short.class);
+        for (Map.Entry<Class<?>, Class<?>> entry : WRAPPER_PRIMITIVE_MAP.entrySet()) {
+            PRIMITIVE_WRAPPER_MAP.put(entry.getValue(), entry.getKey());
+        }
     }
 
     /**
@@ -103,6 +109,23 @@ public class ReflectUtils {
             return false;
         }
         return WRAPPER_PRIMITIVE_MAP.containsKey(clazz);
+    }
+
+    public static Class<?> getFieldParameterizedType(Field field) {
+        if (field.getType().isArray()) {
+            return field.getType().getComponentType();
+        }
+        return (Class<?>) ((ParameterizedType) field.getGenericType()).getActualTypeArguments()[0];
+    }
+
+    public static Class<?> getWrapperClass(Class<?> clazz) {
+        if (clazz == null) {
+            return null;
+        }
+        if (clazz.isPrimitive()) {
+            return PRIMITIVE_WRAPPER_MAP.get(clazz);
+        }
+        return clazz;
     }
 
 }

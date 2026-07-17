@@ -1,6 +1,5 @@
 package io.github.orangewest.trans.annotation;
 
-import io.github.orangewest.trans.core.TransModel;
 import io.github.orangewest.trans.repository.dict.DictTransRepository;
 
 import java.lang.annotation.ElementType;
@@ -8,16 +7,18 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-@Trans(using = DictTransRepository.class, key = TransModel.VAL_EXTRACT)
+/**
+ * 字典翻译仓库注解
+ */
+@TransRepo(using = DictTransRepository.class)
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.FIELD)
-public @interface DictTrans {
-
+public @interface DictTransRepo {
 
     /**
-     * @return 需要翻译的字段
+     * @return 仓库名称（默认使用字段名）
      */
-    String trans();
+    String name() default "";
 
     /**
      * 字典组
