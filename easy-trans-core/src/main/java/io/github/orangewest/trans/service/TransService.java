@@ -6,6 +6,7 @@ import io.github.orangewest.trans.core.TransModel;
 import io.github.orangewest.trans.core.TransRepoMeta;
 import io.github.orangewest.trans.exception.TransException;
 import io.github.orangewest.trans.manager.TransClassMetaCacheManager;
+import io.github.orangewest.trans.metrics.TransMetricsCollector;
 import io.github.orangewest.trans.repository.TransRepository;
 import io.github.orangewest.trans.repository.TransRepositoryFactory;
 import io.github.orangewest.trans.resolver.TransObjResolver;
@@ -59,12 +60,21 @@ public class TransService {
         if (objClass.getName().startsWith("java.")) {
             return false;
         }
-        TransClassMeta info = TransClassMetaCacheManager.getTransClassMeta(objClass);
-        if (!info.needTrans()) {
-            return false;
+        long start = System.nanoTime();
+        boolean success = true;
+        try {
+            TransClassMeta info = TransClassMetaCacheManager.getTransClassMeta(objClass);
+            if (!info.needTrans()) {
+                return false;
+            }
+            doTrans(objList, info.getTransFieldList());
+            return true;
+        } catch (Throwable t) {
+            success = false;
+            throw t;
+        } finally {
+            TransMetricsCollector.get().recordTranslate(System.nanoTime() - start, success);
         }
-        doTrans(objList, info.getTransFieldList());
-        return true;
     }
 
     private Object resolveObj(Object obj) {
@@ -122,7 +132,17 @@ public class TransService {
         }
         List<TransModel> needTransList = toNeedTransList(objList, transFields);
         if (CollectionUtils.isNotEmpty(needTransList)) {
-            doTrans_0(transRepository, transRepoMeta, needTransList);
+            long start = System.nanoTime();
+            boolean success = true;
+            try {
+                doTrans_0(transRepository, transRepoMeta, needTransList);
+            } catch (Throwable t) {
+                success = false;
+                throw t;
+            } finally {
+                TransMetricsCollector.get().recordRepository(
+                        transRepoMeta.getRepoName(), System.nanoTime() - start, success);
+            }
         }
         for (TransFieldMeta transField : transFields) {
             if (CollectionUtils.isNotEmpty(transField.getChildren())) {
