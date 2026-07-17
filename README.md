@@ -35,13 +35,63 @@
 
 </p>
 
+> easy-trans 是一个**轻量、零依赖**的通用数据翻译框架：通过注解声明「翻译哪个字段、从哪个数据源取数」，框架负责并行取数并回填。核心层 `easy-trans-core` 不依赖任何第三方库，缓存、数据源等均由使用者自定义的 `TransRepository` 实现——框架只做编排。
+
+### 特性
+
+- **注解驱动**：在字段上声明 `@Trans` 即可完成翻译，零侵入业务代码
+- **多源取数**：数据库、字典、HTTP、缓存……任意数据源，只需实现 `TransRepository` 接口
+- **并行翻译**：不同仓库的字段并行取数，提升批量翻译性能
+- **嵌套翻译**：支持省→市→区等多层级联翻译
+- **包装对象翻译**：`Result`、`Page` 等包装类型通过 `TransObjResolver` 自动拆包
+- **异步 / 响应式支持**：Spring 集成下 `TransUtil.transResult` 可处理 `CompletableFuture`、`Mono`、`Flux` 等返回值
+- **异常安全**：未初始化、仓库未注册、引用悬空等场景抛出 `TransException`，不再静默失败
+- **可观测性**：内置监控指标接口（翻译耗时 / 仓库耗时），Spring 下自动桥接 Micrometer
+- **有界缓存**：类元数据缓存使用 LRU（上限 1024），避免内存无限增长
+- **零运行时依赖**：`easy-trans-core` 仅依赖 JDK，可嵌入任意项目
+
+### 目录
+
+- [一、架构设计](#一架构设计)
+- [二、优点](#二优点)
+- [三、基本使用](#三基本使用)
+- [四、高级功能](#四高级功能)
+  - [1、自定义注解](#1自定义注解)
+  - [2、嵌套翻译](#2嵌套翻译)
+  - [3、包装类翻译](#3包装类翻译)
+  - [4、对象直接填充](#4对象直接填充)
+  - [5、异常处理](#5异常处理)
+- [五、与 Spring Boot 集成](#五与-spring-boot-集成)
+  - [Micrometer 监控](#可选micrometer-监控)
+
 ## 一、架构设计
 
-架构如下：</br>
-<a href="https://github.com/orangewest/easy-trans">
-<img src="jiagou.png" alt="Logo" width="200" height="400">
-</a>
-</br>翻译核心注解
+框架的核心思路只有一句话：**在字段上声明「翻译哪个字段、从哪个数据源取数」，框架负责并行取数并回填**。整个翻译过程分为四步：
+
+```
+对象 obj
+   │  trans(obj)
+   ▼
+[1] 拆包 resolveObj      ← TransObjResolver 把 Result / Page 等包装对象拆到内部业务对象
+   ▼
+[2] 解析元数据           ← 构建 TransClassMeta，按字段引用关系生成「key → 子字段」翻译树
+   ▼
+[3] 分组并行取数 doTrans ← 按 @TransRepo 分组，各组用 CompletableFuture 并行调用
+   │                       对应 TransRepository.getTransValueMap()
+   ▼
+[4] 回填字段             ← 按 @Trans 把取到的值写回目标字段（支持对象 / 集合 / 嵌套）
+```
+
+四个核心角色相互配合，各司其职：
+
+| 角色 | 说明 |
+| --- | --- |
+| `@Trans` | 标注在**目标字段**上，声明「从哪取数、取出来提取哪个字段」 |
+| `@TransRepo` | 标注在**源字段**上，把源字段绑定到某个 `TransRepository`（可重复、可在自定义注解上作为元注解） |
+| `TransRepository` | 唯一需要你自己实现的接口：`getTransValueMap()` 负责从任意数据源批量取数 |
+| `TransObjResolver` | 负责把 `Result`、`Page` 等包装对象拆包，让翻译触达内部业务对象 |
+
+下面看看这几个核心组件的源码：</br>翻译核心注解
 
 ```java
 
@@ -114,10 +164,13 @@ public @interface TransRepo {
 
 ## 二、优点
 
-1、核心源码简单，仅几百行，无任何依赖项；<br />
-2、高度可拓展，拓展逻辑仅仅只需要实现TransRepository接口；<br />
-3、支持数据库翻译、字典翻译、集合翻译、嵌套翻译等；<br />
-4、并行翻译，翻译不同字段是并行翻译的，性能高<br />
+1. **核心源码简单**：`easy-trans-core` 仅数百行，无任何第三方依赖，可嵌入任意项目；
+2. **高度可扩展**：拓展数据源只需实现 `TransRepository` 一个接口；
+3. **功能完备**：支持数据库翻译、字典翻译、集合翻译、嵌套翻译、包装对象翻译等；
+4. **并行翻译**：不同仓库的字段并行取数，批量翻译性能高；
+5. **异常安全**：初始化、仓库注册、引用等异常场景统一抛出 `TransException`，不再静默吞掉；
+6. **可观测**：内置指标接口，Spring 环境下自动桥接 Micrometer，便于监控翻译耗时；
+7. **有界缓存**：类元数据缓存采用 LRU（默认上限 1024），内存可控。
 
 ## 三、基本使用
 
@@ -128,7 +181,7 @@ maven引入
 <dependency>
     <groupId>io.github.orangewest</groupId>
     <artifactId>easy-trans-core</artifactId>
-    <version>0.2.0</version>
+    <version>1.0.0</version>
 </dependency>
 ```
 
@@ -456,7 +509,7 @@ void trans2() {
 
 ### 2、嵌套翻译
 
-本框架支持多层嵌套翻译，比如翻译省市区，只要按翻译逻辑顺序定义好就行</br>
+本框架支持多层嵌套翻译，比如翻译省市区，只要按翻译逻辑顺序定义好就行。框架会根据字段间的引用关系自动构建 `key → 子字段` 的翻译树，逐层回填。</br>
 示例：
 
 ```java
@@ -568,6 +621,8 @@ void trans6(){
 翻译后：[CityDto(areaId=7,areaName=长沙县,cityId=2,cityName=长沙市,provinceId=1,provinceName=湖南省),CityDto(areaId=8,areaName=测试县,cityId=10,cityName=null,provinceId=null,provinceName=null)]
 ```
 
+> 注意：`areaId=8`（测试县）的 `pid=10` 在数据源中不存在，因此 `cityId`、`provinceId` 等后续层级无法继续翻译，对应字段为 `null`。这是**数据缺失**导致的预期行为，而非框架缺陷——只要链路上的每个 key 都能在仓库中找到对应记录，嵌套翻译即可正常完成。
+
 ### 3、包装类翻译
 
 有些类是包装类，比如返回的结果，返回的分页对象等，需要翻译的数据一般都是里面的实际业务对象，这时候，需要我们去配置解析包装类的解析器。
@@ -645,6 +700,8 @@ void trans3() {
 翻译前：Result(data=Result(data=UserDto2(id=2,name=李四,teacherIds=[1,2],jobIds=[1,2,3],jobNames=null,teacherName=null,subjectIds=null,subjectNames=null),message=success),message=success)
 翻译后：Result(data=Result(data=UserDto2(id=2,name=李四,teacherIds=[1,2],jobIds=[1,2,3],jobNames=[学习委员,生活委员,宣传委员],teacherName=[老师1,老师2],subjectIds=[1,2],subjectNames=[语文,数学]),message=success),message=success)
 ```
+
+> 包装类拆包由 `TransObjResolver` 负责，框架内置对常见包装类型的解析。若返回值是异步 / 响应式类型（如 `CompletableFuture`、`Mono`、`Flux`），Spring 集成下请使用 `TransUtil.transResult(result)`（详见[五、与 Spring Boot 集成](#五与-spring-boot-集成)），框架会在结果就绪后再执行翻译，而非对包装对象本身翻译（后者会静默失效）。
 
 ### 4、对象直接填充
 
@@ -739,33 +796,88 @@ void trans4(){
 }
 ```
 
-### 5、与springboot集成
+### 5、异常处理
+
+翻译过程中若出现配置或运行问题，框架统一抛出 `TransException`（运行时异常），便于及时定位，而非像旧版本那样静默失败。常见场景：
+
+- **未初始化**：未调用 `TransService.init()`（或非 Spring 环境下未注入已初始化的 `TransService`）即调用 `trans()`，抛出 `TransService has not been initialized`；
+- **仓库未注册**：`@TransRepo` 指向的 `TransRepository` 未通过 `TransRepositoryFactory.register(...)`（或 Spring 下未标注 `@Component`）注册，翻译时抛出 `TransRepository is not registered`；
+- **引用悬空**：`@Trans(trans = "xxx")` 指向的源字段 `xxx` 在类上既没有同名 `@TransRepo`、也没有通过 `@Trans(using = ...)` 显式指定仓库，抛出 `references translation repository 'xxx' which is not declared`；
+- **字段不存在**：`@Trans(using = X, trans = "yyy")` 中 `yyy` 在类中不存在，抛出 `but no such field exists`；
+- **循环引用**：嵌套翻译配置形成环路（如 A 依赖 B、B 又依赖 A），构建翻译树时抛出 `Circular translation reference detected`。
+
+> 这些校验在类元数据解析阶段（首次翻译该类时）和翻译执行阶段都会进行，错误信息包含类名与字段名，便于快速定位。
+
+## 五、与 Spring Boot 集成
 
 maven 引入
 
 ```xml
-
 <dependency>
     <groupId>io.github.orangewest</groupId>
     <artifactId>easy-trans-spring-start</artifactId>
-    <version>0.2.0</version>
+    <version>1.0.0</version>
 </dependency>
 ```
 
-翻译仓库实现TransRepository，翻译解析器实现TransObjResolver，并在实现类上标注@Component；</br>
-在需要翻译的对象属性上面标注好相关注解；</br>
-需要翻译方法上使用@AutoTrans注解，框架会自动拦截需要翻译的对象，实现翻译。
+### 自动装配
+
+引入 `easy-trans-spring-start` 后，框架通过 `spring.factories` 自动装配 `EasyTransAutoConfiguration`，无需任何额外配置即可使用：
+
+- 自动创建并 `init()` 一个 `TransService`（单例，`@ConditionalOnMissingBean` 可覆盖）；
+- 自动扫描容器中所有 `TransRepository`、`TransObjResolver`、`DictLoader` 实现类并注册（标注 `@Component` 即可，无需手动 `register`）；
+- 自动注册 `@AutoTrans` 切面与 `TransUtil`。
+
+### 在方法上自动翻译
+
+只需在需要翻译的返回值方法上标注 `@AutoTrans`，框架会拦截返回值并完成翻译：
 
 ```java
 @GetMapping("/query")
 @AutoTrans
-public Result<PageData<BizDTO>>page(Query query){
-
-    PageData<BizDTO> page=bizService.page(query);
-    
+public Result<PageData<BizDTO>> page(Query query) {
+    PageData<BizDTO> page = bizService.page(query);
     return new Result<PageData<BizDTO>>().ok(page);
 }
 ```
+
+- **同步返回**：直接对返回值（含 `Result`、`Page` 等包装对象，由 `TransObjResolver` 拆包）执行翻译；
+- **异步 / 响应式返回**：若返回值是 `CompletableFuture`、`Mono`、`Flux` 等，切面会调用 `TransUtil.transResult`，在结果就绪后再翻译，而非对包装对象本身翻译。
+
+### 手动翻译返回值
+
+若需在非 `@AutoTrans` 方法中翻译返回值，可手动调用：
+
+```java
+Object result = bizService.page(query);
+return TransUtil.transResult(result);   // 自动处理同步 / 异步 / 响应式
+```
+
+也可以直接调用 `TransUtil.trans(obj)` 对已经就绪的对象做同步翻译。
+
+### 可选：Micrometer 监控
+
+`micrometer-core` 在 `easy-trans-spring-start` 中是 **optional 依赖**。当 classpath 中存在 Micrometer 且容器中有 `MeterRegistry` 时，框架自动将翻译指标桥接到 Micrometer，无需任何代码；否则退化为无指标（零开销）。
+
+需引入 Micrometer（以 Spring Boot Actuator 为例）：
+
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-actuator</artifactId>
+</dependency>
+<dependency>
+    <groupId>io.micrometer</groupId>
+    <artifactId>micrometer-registry-prometheus</artifactId>
+</dependency>
+```
+
+桥接后暴露以下 Timer 指标：
+
+| 指标名 | Tag | 含义 |
+| --- | --- | --- |
+| `easytrans.translate` | `success` | 单次 `trans()` 调用耗时 |
+| `easytrans.repository` | `repo`、`success` | 单个翻译仓库耗时（`repo` 为 `@TransRepo` 字段名或 `@Trans` 源字段名） |
 
 <!--links-->
 
