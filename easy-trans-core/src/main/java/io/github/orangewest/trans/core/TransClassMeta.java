@@ -2,6 +2,7 @@ package io.github.orangewest.trans.core;
 
 import io.github.orangewest.trans.annotation.Trans;
 import io.github.orangewest.trans.annotation.TransRepo;
+import io.github.orangewest.trans.exception.TransException;
 import io.github.orangewest.trans.repository.TransRepository;
 import io.github.orangewest.trans.util.ReflectUtils;
 import io.github.orangewest.trans.util.StringUtils;
@@ -61,18 +62,20 @@ public class TransClassMeta implements Serializable {
             }
             String trans = transAnno.trans();
             String key = transAnno.key();
-            Class<? extends TransRepository<?, ?>>[] usingArray = transAnno.using();
-            if (usingArray.length > 0) {
+            Class<? extends TransRepository<?, ?>> using = transAnno.using();
+            if (using != Trans.None.class) {
                 Field transField = fieldNameMap.get(trans);
                 if (transField == null) {
-                    continue;
+                    throw new TransException("Field '" + field.getName() + "' declares @Trans(trans=\""
+                            + trans + "\") but no such field exists in class " + clazz.getName() + ".");
                 }
-                Class<? extends TransRepository<?, ?>> using = usingArray[0];
                 trans = using.getName() + "#" + trans;
                 transRepoMetaMap.putIfAbsent(trans, new TransRepoMeta(transAnno.trans(), transField, null, using));
             }
             if (!transRepoMetaMap.containsKey(trans)) {
-                continue;
+                throw new TransException("Field '" + field.getName() + "' references translation repository '"
+                        + trans + "' which is not declared (no @TransRepo or @Trans(using=...) found) in class "
+                        + clazz.getName() + ".");
             }
             if (StringUtils.isEmpty(key)) {
                 key = field.getName();
@@ -134,17 +137,25 @@ public class TransClassMeta implements Serializable {
 
         return transFieldMetas.stream()
                 .filter(m -> !nameMap.containsKey(m.getTransRepoMeta().getRepoName()))
-                .peek(m -> findChildren(Collections.singletonList(m), tempMap))
+                .peek(m -> {
+                    Set<TransFieldMeta> visited = Collections.newSetFromMap(new IdentityHashMap<TransFieldMeta, Boolean>());
+                    findChildren(Collections.singletonList(m), tempMap, visited);
+                })
                 .collect(toList());
     }
 
-    private void findChildren(List<TransFieldMeta> root, Map<String, List<TransFieldMeta>> tempMap) {
+    private void findChildren(List<TransFieldMeta> root, Map<String, List<TransFieldMeta>> tempMap, Set<TransFieldMeta> visited) {
         root.stream()
                 .filter(x -> tempMap.containsKey(x.getField().getName()))
                 .forEach(x -> {
+                    if (!visited.add(x)) {
+                        throw new TransException("Circular translation reference detected at field '"
+                                + x.getField().getName() + "' in class " + clazz.getName()
+                                + ". Please check @Trans/@TransRepo configuration to avoid loops.");
+                    }
                     List<TransFieldMeta> children = tempMap.get(x.getField().getName());
                     x.setChildren(children);
-                    findChildren(children, tempMap);
+                    findChildren(children, tempMap, visited);
                 });
     }
 

@@ -25,8 +25,14 @@ public @interface Trans {
     String key() default "";
 
     /**
-     * @return 翻译数据获取仓库
+     * @return 翻译数据获取仓库；未指定时通过 {@code trans()} 名称匹配 {@code @TransRepo}
      */
-    Class<? extends TransRepository<?, ?>>[] using() default {};
+    Class<? extends TransRepository<?, ?>> using() default None.class;
+
+    /**
+     * 哨兵类型，用于在未显式指定 {@link #using()} 时占位。框架据此判断 {@code using} 是否提供。
+     */
+    interface None extends TransRepository<Object, Object> {
+    }
 
 }

@@ -4,6 +4,7 @@ import io.github.orangewest.trans.core.TransClassMeta;
 import io.github.orangewest.trans.core.TransFieldMeta;
 import io.github.orangewest.trans.core.TransModel;
 import io.github.orangewest.trans.core.TransRepoMeta;
+import io.github.orangewest.trans.exception.TransException;
 import io.github.orangewest.trans.manager.TransClassMetaCacheManager;
 import io.github.orangewest.trans.repository.TransRepository;
 import io.github.orangewest.trans.repository.TransRepositoryFactory;
@@ -11,7 +12,9 @@ import io.github.orangewest.trans.resolver.TransObjResolver;
 import io.github.orangewest.trans.resolver.TransObjResolverFactory;
 import io.github.orangewest.trans.util.CollectionUtils;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -42,7 +45,7 @@ public class TransService {
      */
     public boolean trans(Object obj) {
         if (!isInit) {
-            return false;
+            throw new TransException("TransService has not been initialized, call init() before invoking trans().");
         }
         obj = resolveObj(obj);
         if (obj == null) {
@@ -87,13 +90,23 @@ public class TransService {
     private void doTrans(List<Object> objList, List<TransFieldMeta> transFieldMetaList) {
         Map<TransRepoMeta, List<TransFieldMeta>> listMap = transFieldMetaList.stream().collect(Collectors.groupingBy(TransFieldMeta::getTransRepoMeta));
         if (listMap.size() > 1) {
+            List<Throwable> errors = Collections.synchronizedList(new ArrayList<>());
             CompletableFuture.allOf(
                             listMap.entrySet()
                                     .stream()
-                                    .map(entry -> CompletableFuture.runAsync(() ->
-                                            doTrans(objList, entry.getKey(), entry.getValue()), executor))
+                                    .map(entry -> CompletableFuture.runAsync(() -> {
+                                        try {
+                                            doTrans(objList, entry.getKey(), entry.getValue());
+                                        } catch (Throwable t) {
+                                            errors.add(t);
+                                        }
+                                    }, executor))
                                     .toArray(CompletableFuture[]::new))
                     .join();
+            if (!errors.isEmpty()) {
+                Throwable cause = errors.get(0);
+                throw new TransException("Translation failed: " + cause.getMessage(), cause);
+            }
         } else {
             listMap.forEach((transRepoMeta, transFields) -> doTrans(objList, transRepoMeta, transFields));
         }
@@ -103,7 +116,9 @@ public class TransService {
         // 获取翻译仓库
         TransRepository<Object, Object> transRepository = TransRepositoryFactory.getTransRepository(transRepoMeta.getRepository());
         if (transRepository == null) {
-            return;
+            throw new TransException("TransRepository is not registered: "
+                    + (transRepoMeta.getRepository() == null ? "null" : transRepoMeta.getRepository().getName())
+                    + ". Register it via TransRepositoryFactory.register(...) or mark it as a @Component in Spring.");
         }
         List<TransModel> needTransList = toNeedTransList(objList, transFields);
         if (CollectionUtils.isNotEmpty(needTransList)) {
