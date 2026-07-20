@@ -2,13 +2,15 @@
 
 This file provides guidance to CodeBuddy Code when working with code in this repository.
 
+# 注意，要使用简体中文回复用户
+
 ## Overview
 
 `easy-trans` is a generic, annotation-driven **data translation** framework for Java. "Translation" here means: given an object with a raw key field (e.g. `sex=1`, `teacherId=2`), automatically populate companion display/derived fields (e.g. `sexName="男"`, `teacherName="老师2"`) by looking up data from a `TransRepository`. It supports dictionary translation, collection/array translation, object filling, wrapper unwrapping, and multi-level nested translation. Core source is ~hundreds of lines with no third-party dependencies.
 
 ## Build & Test
 
-Maven multi-module project, **Java 8**, groupId `io.github.orangewest`, version `0.2.0`. There is no checkstyle/spotless/lint configured.
+Maven multi-module project, **JDK 25** (`maven.compiler.release=25`), groupId `io.github.orangewest`, version `2.0.0`. There is no checkstyle/spotless/lint configured.
 
 ```bash
 # Build entire project (root)
@@ -35,7 +37,8 @@ Notes:
 ## Module layout
 
 - **`easy-trans-core`** — framework implementation. Pure Java, no external dependencies. Package root: `io.github.orangewest.trans`.
-- **`easy-trans-spring-start`** — Spring Boot 2.7.18 auto-configuration that wires the core into a Spring context. Package root: `io.github.orangewest.trans.spring`.
+- **`easy-trans-spring-start`** — Spring Boot 4.1.0 auto-configuration that wires the core into a Spring context; provides GraalVM Native Image support via `EasyTransRuntimeHints` (RuntimeHints). Package root: `io.github.orangewest.trans.spring`.
+- **`easy-trans-demo`** — sample Spring Boot consumer app used to verify translation end-to-end and as the native-image build target. Package root: `io.github.orangewest.easytrans.demo`.
 
 ## Core architecture
 
@@ -56,7 +59,7 @@ Notes:
 - `TransService.trans(obj)` is the entry point. Flow:
   1. `resolveObj` — recursively unwrap via registered `TransObjResolver`s.
   2. Normalize to a `List<Object>`; look up `TransClassMeta` for the class.
-  3. `doTrans` — group target fields by their `TransRepoMeta`, and translate each repo group **in parallel** via `CompletableFuture` on a cached thread pool (created in `init()`).
+  3. `doTrans` — group target fields by their `TransRepoMeta`, and translate each repo group **in parallel** via `CompletableFuture` on a virtual-thread executor (created in `init()`; overridable via `TransService.setExecutor(...)`).
 - `TransClassMetaCacheManager` — caches one `TransClassMeta` per class (lazily built on first encounter).
 - **Metadata model** (the mental model to read across many files):
   - `TransClassMeta` parses a class into a list of `TransFieldMeta` and a map of `TransRepoMeta`.
@@ -68,7 +71,7 @@ Notes:
 ### Spring integration (package `...trans.spring`)
 - `EasyTransAutoConfiguration` registers: `TransService` (calls `init()`), `DictTransRepository` (only if a `DictLoader` bean exists), `EasyTransRegister`, `AutoTransAspect`, `TransUtil`.
 - `EasyTransRegister` is a `BeanPostProcessor` that auto-registers every `TransRepository` and `TransObjResolver` Spring bean into the static factories — so in Spring you only annotate your `@Component` repositories/resolvers, no manual `register(...)` calls.
-- `AutoTransAspect` intercepts methods annotated `@AutoTrans` (`@AfterReturning`) and translates the return value via `TransUtil.trans`.
+- `AutoTransAspect` intercepts methods annotated `@AutoTrans` (`@Around`) and translates the return value via `TransUtil.transResult`.
 - `TransUtil.trans(obj)` is the static entry point usable anywhere in a Spring app.
 
 ## Key conventions / gotchas
@@ -76,4 +79,4 @@ Notes:
 - Multi-value sources (`List`/`Set`/array fields annotated with `@TransRepo`) drive collection translation; the corresponding `@Trans` target is filled with a list/array of extracted values.
 - When a `@Trans` target's type matches the repository result type, the **entire object** is filled (object filling, see `UserDto3.teacher`). Otherwise the `key()` field is extracted.
 - The framework intentionally has **no external runtime dependencies** in `easy-trans-core`; keep it that way. Only add dependencies in `easy-trans-spring-start` for Spring concerns.
-- Java 8 source/target — avoid language features above Java 8 in main source.
+- Source/target is `maven.compiler.release=25`; modern JDK 25 syntax is acceptable in main source, but keep `easy-trans-core` free of external runtime dependencies.
