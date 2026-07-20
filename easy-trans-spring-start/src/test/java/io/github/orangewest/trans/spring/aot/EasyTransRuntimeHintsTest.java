@@ -4,6 +4,7 @@ import io.github.orangewest.trans.annotation.DictTransRepo;
 import io.github.orangewest.trans.annotation.Trans;
 import io.github.orangewest.trans.annotation.TransRepo;
 import io.github.orangewest.trans.annotation.TransRepos;
+import io.github.orangewest.trans.repository.TransContext;
 import io.github.orangewest.trans.repository.TransRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -49,6 +50,7 @@ class EasyTransRuntimeHintsTest {
         assertDtoFieldAccess(registered, DictDto.class);
         assertDtoFieldAccess(registered, RepeatRepoDto.class);
         assertDtoFieldAccess(registered, CustomMetaDto.class);
+        assertDtoFieldAccess(registered, CustomTransFieldDto.class);
 
         // 2. 抽象父类的 @Trans 字段（由具体子类实例化）也要被扫描到
         assertDtoFieldAccess(registered, AbstractParent.class);
@@ -59,8 +61,13 @@ class EasyTransRuntimeHintsTest {
         assertAnnotationMethodAccess(registered, DictTransRepo.class);
         assertAnnotationMethodAccess(registered, TransRepos.class);
 
-        // 4. 自定义「@TransRepo 元注解」也需方法调用 hint（ReflectUtils.invokeAnnotation 反射调用 name()）
+        // 4. 自定义「@TransRepo 元注解」需方法调用 hint（ReflectUtils.invokeAnnotation 反射调用 name()）
         assertAnnotationMethodAccess(registered, MyRepo.class);
+
+        // 5. 自定义「@Trans 元注解」（含 extra 属性）需方法调用 hint：
+        //    ReflectUtils.extractAnnotationAttributes 在解析期反射调用其自有属性（如 group()），
+        //    缺少该 hint 会在 Native Image 下抛 InaccessibleObjectException。
+        assertAnnotationMethodAccess(registered, MyTransField.class);
     }
 
     private void assertDtoFieldAccess(Map<String, Set<MemberCategory>> registered, Class<?> dto) {
@@ -87,7 +94,7 @@ class EasyTransRuntimeHintsTest {
 
         @Override
         public java.util.Map<Object, Object> getTransValueMap(List<Object> values,
-                                                              java.lang.annotation.Annotation anno) {
+                                                              TransContext context) {
             return java.util.Collections.emptyMap();
         }
     }
@@ -121,6 +128,22 @@ class EasyTransRuntimeHintsTest {
     static class CustomMetaDto {
         @MyRepo
         private String custom;
+    }
+
+    /** 自定义「@Trans 元注解」：自身被 @Trans 元标注，并携带 extra 属性 group()。 */
+    @Target(ElementType.FIELD)
+    @Retention(RetentionPolicy.RUNTIME)
+    @Trans(trans = "sexRepo", using = MyRepoImpl.class)
+    @interface MyTransField {
+        String group() default "";
+    }
+
+    static class CustomTransFieldDto {
+        @TransRepo(using = MyRepoImpl.class)
+        private String sexRepo;
+
+        @MyTransField(group = "sex")
+        private String sexName;
     }
 
     static abstract class AbstractParent {

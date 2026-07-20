@@ -10,6 +10,7 @@ import io.github.orangewest.trans.metrics.TransMetrics;
 import io.github.orangewest.trans.metrics.TransMetricsCollector;
 import io.github.orangewest.trans.repository.TransRepository;
 import io.github.orangewest.trans.repository.TransRepositoryFactory;
+import io.github.orangewest.trans.repository.DefaultTransContext;
 import io.github.orangewest.trans.resolver.TransObjResolver;
 import io.github.orangewest.trans.resolver.TransObjResolverFactory;
 import io.github.orangewest.trans.util.CollectionUtils;
@@ -26,20 +27,29 @@ import java.util.stream.Collectors;
 
 public class TransService {
 
-    private ExecutorService executor;
-
-    private volatile boolean isInit = false;
+    private volatile ExecutorService executor;
 
     public void setExecutor(ExecutorService executor) {
         this.executor = executor;
     }
 
-    public void init() {
-        if (this.executor == null) {
-            this.executor = Executors.newThreadPerTaskExecutor(
-                    Thread.ofVirtual().name("trans-", 0).factory());
+    /**
+     * 懒初始化虚拟线程执行器：未通过 {@link #setExecutor} 显式指定时，
+     * 首次翻译按需创建（每个任务一条虚拟线程）。无需调用方预先 init()。
+     */
+    private ExecutorService getExecutor() {
+        ExecutorService e = executor;
+        if (e == null) {
+            synchronized (this) {
+                e = executor;
+                if (e == null) {
+                    e = Executors.newThreadPerTaskExecutor(
+                            Thread.ofVirtual().name("trans-", 0).factory());
+                    executor = e;
+                }
+            }
         }
-        isInit = true;
+        return e;
     }
 
     /**
@@ -47,9 +57,6 @@ public class TransService {
      * @return 是否翻译成功
      */
     public boolean trans(Object obj) {
-        if (!isInit) {
-            throw new TransException("TransService has not been initialized, call init() before invoking trans().");
-        }
         obj = resolveObj(obj);
         if (obj == null) {
             return false;
@@ -111,7 +118,7 @@ public class TransService {
                                         } catch (Throwable t) {
                                             errors.add(t);
                                         }
-                                    }, executor))
+                                    }, getExecutor()))
                                     .toArray(CompletableFuture[]::new))
                     .join();
             if (!errors.isEmpty()) {
@@ -168,7 +175,8 @@ public class TransService {
 
     private void doTrans_0(TransRepository<Object, Object> transRepository, TransRepoMeta transRepoMeta, List<TransModel> transModels) {
         List<Object> transValues = transModels.stream().map(TransModel::getMultipleTransVal).flatMap(Collection::stream).distinct().collect(Collectors.toList());
-        Map<Object, Object> transValueMap = transRepository.getTransValueMap(transValues, transRepoMeta.getRepoAnno());
+        Map<Object, Object> transValueMap = transRepository.getTransValueMap(transValues,
+                new DefaultTransContext(transRepoMeta.getRepoName(), transRepoMeta.getAttributes()));
         if (CollectionUtils.isNotEmpty(transValueMap)) {
             transModels.forEach(transModel -> transModel.fillValue(transValueMap));
         }

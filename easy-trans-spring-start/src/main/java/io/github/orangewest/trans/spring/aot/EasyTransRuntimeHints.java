@@ -196,16 +196,10 @@ public class EasyTransRuntimeHints implements RuntimeHintsRegistrar {
         @Nullable
         public FieldVisitor visitField(int access, String name, String descriptor,
                                        @Nullable String signature, @Nullable Object value) {
-            if (found) {
-                return null;
-            }
             return new FieldVisitor(Opcodes.ASM9) {
                 @Override
                 @Nullable
                 public AnnotationVisitor visitAnnotation(String desc, boolean visible) {
-                    if (found) {
-                        return null;
-                    }
                     if (KNOWN_TRAN_ANNO_DESCRIPTORS.contains(desc)) {
                         found = true;
                     } else if (isTransMetaAnnotation(desc, new HashSet<>())) {

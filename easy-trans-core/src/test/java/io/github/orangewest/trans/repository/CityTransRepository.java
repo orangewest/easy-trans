@@ -2,7 +2,6 @@ package io.github.orangewest.trans.repository;
 
 import io.github.orangewest.trans.dto.CityEntity;
 
-import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -11,7 +10,7 @@ import java.util.stream.Collectors;
 public class CityTransRepository implements TransRepository<Long, CityEntity> {
 
     @Override
-    public Map<Long, CityEntity> getTransValueMap(List<Long> transValues, Annotation transAnno) {
+    public Map<Long, CityEntity> getTransValueMap(List<Long> transValues, TransContext context) {
         return data().stream()
                 .filter(x -> transValues.contains(x.getId()))
                 .collect(Collectors.toMap(CityEntity::getId, x -> x));

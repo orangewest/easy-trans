@@ -2,7 +2,6 @@ package io.github.orangewest.trans.repository;
 
 import io.github.orangewest.trans.dto.DeptDto;
 
-import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -12,7 +11,7 @@ public class DeptTransRepository implements TransRepository<String, DeptDto> {
 
 
     @Override
-    public Map<String, DeptDto> getTransValueMap(List<String> transValues, Annotation transAnno) {
+    public Map<String, DeptDto> getTransValueMap(List<String> transValues, TransContext context) {
         return getDepts().stream()
                 .filter(x -> transValues.contains(x.getCode()))
                 .collect(Collectors.toMap(DeptDto::getCode, x -> x));

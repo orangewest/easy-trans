@@ -2,6 +2,7 @@ package io.github.orangewest.trans.metrics;
 
 import io.github.orangewest.trans.annotation.Trans;
 import io.github.orangewest.trans.annotation.TransRepo;
+import io.github.orangewest.trans.repository.TransContext;
 import io.github.orangewest.trans.repository.TransRepository;
 import io.github.orangewest.trans.repository.TransRepositoryFactory;
 import io.github.orangewest.trans.service.TransService;
@@ -9,7 +10,6 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.lang.annotation.Annotation;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -22,7 +22,7 @@ class TransMetricsTest {
 
     static class NameRepo implements TransRepository<Long, String> {
         @Override
-        public Map<Long, String> getTransValueMap(List<Long> transValues, Annotation transAnno) {
+        public Map<Long, String> getTransValueMap(List<Long> transValues, TransContext context) {
             Map<Long, String> map = new java.util.HashMap<>();
             for (Long v : transValues) {
                 map.put(v, "name-" + v);
@@ -100,7 +100,6 @@ class TransMetricsTest {
     void metrics_are_recorded_on_translation() {
         int before = recording.translateCalls.get();
         TransService service = new TransService();
-        service.init();
         MetricsDto dto = new MetricsDto(1L);
         boolean result = service.trans(dto);
 
@@ -115,7 +114,6 @@ class TransMetricsTest {
     void metrics_record_failure_on_exception() {
         int before = recording.translateCalls.get();
         TransService service = new TransService();
-        service.init();
         // 引用不存在的仓库：触发 TransException，应记录 success=false
         class NoRepoDto {
             @Trans(trans = "missing")

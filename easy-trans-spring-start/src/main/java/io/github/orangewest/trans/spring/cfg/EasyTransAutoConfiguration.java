@@ -21,9 +21,7 @@ public class EasyTransAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public TransService transService() {
-        TransService transService = new TransService();
-        transService.init();
-        return transService;
+        return new TransService();
     }
 
     @Bean

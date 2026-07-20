@@ -1,9 +1,9 @@
 package io.github.orangewest.easytrans.demo.repository;
 
+import io.github.orangewest.trans.repository.TransContext;
 import io.github.orangewest.trans.repository.TransRepository;
 import org.springframework.stereotype.Component;
 
-import java.lang.annotation.Annotation;
 import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
@@ -12,7 +12,7 @@ import java.util.Map;
 public class SexRepository implements TransRepository<Integer, String> {
 
     @Override
-    public Map<Integer, String> getTransValueMap(List<Integer> values, Annotation anno) {
+    public Map<Integer, String> getTransValueMap(List<Integer> values, TransContext context) {
         Map<Integer, String> result = new HashMap<>();
         for (Integer v : values) {
             if (v == null) {

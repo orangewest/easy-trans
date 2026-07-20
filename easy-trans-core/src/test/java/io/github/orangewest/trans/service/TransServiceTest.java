@@ -56,7 +56,6 @@ class TransServiceTest {
     @BeforeEach
     public void init() {
         transService = new TransService();
-        transService.init();
     }
 
     @Test
