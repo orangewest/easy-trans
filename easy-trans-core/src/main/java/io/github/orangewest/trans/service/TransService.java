@@ -6,6 +6,7 @@ import io.github.orangewest.trans.core.TransModel;
 import io.github.orangewest.trans.core.TransRepoMeta;
 import io.github.orangewest.trans.exception.TransException;
 import io.github.orangewest.trans.manager.TransClassMetaCacheManager;
+import io.github.orangewest.trans.metrics.TransMetrics;
 import io.github.orangewest.trans.metrics.TransMetricsCollector;
 import io.github.orangewest.trans.repository.TransRepository;
 import io.github.orangewest.trans.repository.TransRepositoryFactory;
@@ -61,8 +62,7 @@ public class TransService {
         if (objClass.getName().startsWith("java.")) {
             return false;
         }
-        long start = System.nanoTime();
-        boolean success = true;
+        TransMetrics.Sample sample = TransMetricsCollector.get().startTranslate();
         try {
             TransClassMeta info = TransClassMetaCacheManager.getTransClassMeta(objClass);
             if (!info.needTrans()) {
@@ -71,10 +71,10 @@ public class TransService {
             doTrans(objList, info.getTransFieldList());
             return true;
         } catch (Throwable t) {
-            success = false;
+            sample.error(t);
             throw t;
         } finally {
-            TransMetricsCollector.get().recordTranslate(System.nanoTime() - start, success);
+            sample.stop();
         }
     }
 
@@ -133,16 +133,15 @@ public class TransService {
         }
         List<TransModel> needTransList = toNeedTransList(objList, transFields);
         if (CollectionUtils.isNotEmpty(needTransList)) {
-            long start = System.nanoTime();
-            boolean success = true;
+            TransMetrics.Sample sample = TransMetricsCollector.get()
+                    .startRepository(transRepoMeta.getRepoName());
             try {
                 doTrans_0(transRepository, transRepoMeta, needTransList);
             } catch (Throwable t) {
-                success = false;
+                sample.error(t);
                 throw t;
             } finally {
-                TransMetricsCollector.get().recordRepository(
-                        transRepoMeta.getRepoName(), System.nanoTime() - start, success);
+                sample.stop();
             }
         }
         for (TransFieldMeta transField : transFields) {
@@ -165,7 +164,7 @@ public class TransService {
                 .filter(TransModel::needTrans)
                 .collect(Collectors.toList());
     }
-    
+
 
     private void doTrans_0(TransRepository<Object, Object> transRepository, TransRepoMeta transRepoMeta, List<TransModel> transModels) {
         List<Object> transValues = transModels.stream().map(TransModel::getMultipleTransVal).flatMap(Collection::stream).distinct().collect(Collectors.toList());

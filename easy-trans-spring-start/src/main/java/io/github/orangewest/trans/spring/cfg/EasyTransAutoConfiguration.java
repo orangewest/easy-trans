@@ -48,17 +48,18 @@ public class EasyTransAutoConfiguration {
     }
 
     /**
-     * 当 classpath 存在 Micrometer 且容器中有 MeterRegistry 时，将翻译指标桥接到 Micrometer。
-     * micrometer-core 为 optional 依赖，未引入时该配置不生效，框架退化为无指标（零开销）。
+     * 当 classpath 存在 Micrometer Observation 且容器中有 ObservationRegistry 时，将翻译指标桥接到 Micrometer。
+     * micrometer-core 为 optional 依赖（其传递依赖包含 micrometer-observation），未引入时该配置不生效，
+     * 框架退化为无指标（零开销）。
      */
     @Configuration
-    @ConditionalOnClass(name = "io.micrometer.core.instrument.MeterRegistry")
+    @ConditionalOnClass(name = "io.micrometer.observation.ObservationRegistry")
     static class MetricsConfiguration {
 
         @Bean
-        @ConditionalOnBean(io.micrometer.core.instrument.MeterRegistry.class)
-        public TransMetrics transMetrics(io.micrometer.core.instrument.MeterRegistry meterRegistry) {
-            TransMetricsMicrometer transMetrics = new TransMetricsMicrometer(meterRegistry);
+        @ConditionalOnBean(io.micrometer.observation.ObservationRegistry.class)
+        public TransMetrics transMetrics(io.micrometer.observation.ObservationRegistry observationRegistry) {
+            TransMetricsMicrometer transMetrics = new TransMetricsMicrometer(observationRegistry);
             TransMetricsCollector.set(transMetrics);
             return transMetrics;
         }

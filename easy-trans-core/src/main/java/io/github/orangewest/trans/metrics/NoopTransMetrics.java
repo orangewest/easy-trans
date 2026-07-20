@@ -5,14 +5,26 @@ package io.github.orangewest.trans.metrics;
  */
 public class NoopTransMetrics implements TransMetrics {
 
+    private static final Sample NOOP_SAMPLE = new Sample() {
+        @Override
+        public void error(Throwable t) {
+            // no-op
+        }
+
+        @Override
+        public void stop() {
+            // no-op
+        }
+    };
+
     @Override
-    public void recordTranslate(long durationNanos, boolean success) {
-        // no-op
+    public Sample startTranslate() {
+        return NOOP_SAMPLE;
     }
 
     @Override
-    public void recordRepository(String repoName, long durationNanos, boolean success) {
-        // no-op
+    public Sample startRepository(String repoName) {
+        return NOOP_SAMPLE;
     }
 
 }

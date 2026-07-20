@@ -47,16 +47,38 @@ class TransMetricsTest {
         final AtomicInteger translateCalls = new AtomicInteger();
         final AtomicInteger repoCalls = new AtomicInteger();
         final AtomicReference<String> lastRepo = new AtomicReference<>();
+        final AtomicReference<Boolean> lastTranslateError = new AtomicReference<>();
+        final AtomicReference<Boolean> lastRepoError = new AtomicReference<>();
 
         @Override
-        public void recordTranslate(long durationNanos, boolean success) {
-            translateCalls.incrementAndGet();
+        public Sample startTranslate() {
+            return new RecordingSample(translateCalls, lastTranslateError);
         }
 
         @Override
-        public void recordRepository(String repoName, long durationNanos, boolean success) {
-            repoCalls.incrementAndGet();
+        public Sample startRepository(String repoName) {
             lastRepo.set(repoName);
+            return new RecordingSample(repoCalls, lastRepoError);
+        }
+
+        static final class RecordingSample implements Sample {
+            private final AtomicInteger calls;
+            private final AtomicReference<Boolean> errorRef;
+
+            RecordingSample(AtomicInteger calls, AtomicReference<Boolean> errorRef) {
+                this.calls = calls;
+                this.errorRef = errorRef;
+            }
+
+            @Override
+            public void error(Throwable t) {
+                errorRef.set(true);
+            }
+
+            @Override
+            public void stop() {
+                calls.incrementAndGet();
+            }
         }
     }
 
