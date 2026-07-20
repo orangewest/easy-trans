@@ -10,68 +10,20 @@
     </parent>
 
     <artifactId>easy-trans-demo</artifactId>
+    <packaging>pom</packaging>
     <name>easy-trans-demo</name>
+    <description>easy-trans 各场景集成测试示例聚合模块</description>
 
-    <dependencies>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.github.orangewest</groupId>
-            <artifactId>easy-trans-spring-start</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-    </dependencies>
+    <!-- 聚合模块本身不发布，跳过 source/javadoc/gpg -->
+    <properties>
+        <maven.javadoc.skip>true</maven.javadoc.skip>
+        <maven.source.skip>true</maven.source.skip>
+        <maven.gpg.skip>true</maven.gpg.skip>
+    </properties>
 
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-            </plugin>
-        </plugins>
-    </build>
-
-    <profiles>
-        <profile>
-            <id>native</id>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.springframework.boot</groupId>
-                        <artifactId>spring-boot-maven-plugin</artifactId>
-                        <executions>
-                            <execution>
-                                <id>process-aot</id>
-                                <goals>
-                                    <goal>process-aot</goal>
-                                </goals>
-                                <phase>prepare-package</phase>
-                            </execution>
-                        </executions>
-                    </plugin>
-                    <plugin>
-                        <groupId>org.graalvm.buildtools</groupId>
-                        <artifactId>native-maven-plugin</artifactId>
-                        <executions>
-                            <execution>
-                                <id>build-native</id>
-                                <goals>
-                                    <goal>compile-no-fork</goal>
-                                </goals>
-                                <phase>package</phase>
-                            </execution>
-                        </executions>
-                        <configuration>
-                            <imageName>${project.artifactId}</imageName>
-                            <buildArgs>
-                                <buildArg>--no-fallback</buildArg>
-                            </buildArgs>
-                        </configuration>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-    </profiles>
+    <modules>
+        <module>easy-trans-demo-aot</module>
+        <module>easy-trans-demo-mybatis</module>
+        <module>easy-trans-demo-jpa</module>
+    </modules>
 </project>

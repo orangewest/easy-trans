@@ -108,8 +108,26 @@ public class TransClassMeta {
         Trans[] metaTrans = annotation.annotationType().getDeclaredAnnotationsByType(Trans.class);
         if (metaTrans.length > 0) {
             Trans meta = metaTrans[0];
-            return new TransLike(meta.trans(), meta.key(), meta.using(),
-                    ReflectUtils.extractAnnotationAttributes(annotation));
+            Map<String, Object> attributes = ReflectUtils.extractAnnotationAttributes(annotation);
+            // 自定义元注解若未在元 @Trans 上写死 trans/key（例如 @DbTrans 把 trans()/key() 作为自身成员、
+            // 由调用处按字段差异化传入），则回退到注解自身声明的 trans()/key() 成员，
+            // 使自定义 @Trans 元注解也能参数化 trans/key（同时保持向后兼容：
+            // MyTrans 这类无自有成员、完全依赖元 @Trans 常量的注解行为不变）。
+            String trans = meta.trans();
+            if (trans == null || trans.isEmpty()) {
+                Object t = attributes.get("trans");
+                if (t instanceof String s && !s.isEmpty()) {
+                    trans = s;
+                }
+            }
+            String key = meta.key();
+            if (key == null || key.isEmpty()) {
+                Object k = attributes.get("key");
+                if (k instanceof String s && !s.isEmpty()) {
+                    key = s;
+                }
+            }
+            return new TransLike(trans, key, meta.using(), attributes);
         }
         return null;
     }
