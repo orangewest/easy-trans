@@ -2,8 +2,8 @@ package io.github.orangewest.trans.core;
 
 import io.github.orangewest.trans.repository.TransRepository;
 
-import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
+import java.util.Map;
 
 public class TransRepoMeta {
 
@@ -23,9 +23,10 @@ public class TransRepoMeta {
     private final boolean isMultiple;
 
     /**
-     * 属性指定的翻译注解
+     * 源注解（{@code @TransRepo} / 自定义元注解 / {@code @Trans(using=...)}) 的属性，
+     * 由框架在解析阶段通过反射提取并缓存，运行时零反射。
      */
-    private final Annotation repoAnno;
+    private final Map<String, Object> attributes;
 
     /**
      * 属性使用的翻译仓库
@@ -33,10 +34,10 @@ public class TransRepoMeta {
     private final Class<? extends TransRepository<?, ?>> repository;
 
 
-    public TransRepoMeta(String repoName, Field repoField, Annotation repoAnno, Class<? extends TransRepository<?, ?>> repository) {
+    public TransRepoMeta(String repoName, Field repoField, Map<String, Object> attributes, Class<? extends TransRepository<?, ?>> repository) {
         this.repoName = repoField != null ? repoField.getName() : repoName;
         this.repoField = repoField;
-        this.repoAnno = repoAnno;
+        this.attributes = attributes;
         this.repository = repository;
         this.isMultiple = repoField != null &&
                 ((Iterable.class).isAssignableFrom(repoField.getType()) || repoField.getType().isArray());
@@ -50,8 +51,8 @@ public class TransRepoMeta {
         return repoField;
     }
 
-    public Annotation getRepoAnno() {
-        return repoAnno;
+    public Map<String, Object> getAttributes() {
+        return attributes;
     }
 
     public Class<? extends TransRepository<?, ?>> getRepository() {

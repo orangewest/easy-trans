@@ -2,11 +2,11 @@ package io.github.orangewest.trans.service;
 
 import io.github.orangewest.trans.annotation.Trans;
 import io.github.orangewest.trans.exception.TransException;
+import io.github.orangewest.trans.repository.TransContext;
 import io.github.orangewest.trans.repository.TransRepository;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-import java.lang.annotation.Annotation;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,7 +20,7 @@ class TransServiceFailureTest {
     /** 一个从未注册的翻译仓库 */
     static class UnregisteredRepo implements TransRepository<Long, String> {
         @Override
-        public Map<Long, String> getTransValueMap(List<Long> transValues, Annotation transAnno) {
+        public Map<Long, String> getTransValueMap(List<Long> transValues, TransContext context) {
             return new HashMap<Long, String>();
         }
     }
@@ -45,15 +45,8 @@ class TransServiceFailureTest {
     }
 
     @Test
-    void notInit_throws() {
-        TransService ts = new TransService();
-        Assertions.assertThrows(TransException.class, () -> ts.trans(new UnregisteredRepoDto(1L)));
-    }
-
-    @Test
     void missingRepo_throws() {
         TransService ts = new TransService();
-        ts.init();
         Assertions.assertThrows(TransException.class, () -> ts.trans(new UnregisteredRepoDto(1L)));
     }
 
@@ -79,7 +72,6 @@ class TransServiceFailureTest {
     @Test
     void danglingRepoReference_throws() {
         TransService ts = new TransService();
-        ts.init();
         Assertions.assertThrows(TransException.class, () -> ts.trans(new DanglingDto(1L)));
     }
 
