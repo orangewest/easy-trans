@@ -52,6 +52,7 @@
 
 ### 目录
 
+- [环境要求](#环境要求)
 - [一、架构设计](#一架构设计)
 - [二、优点](#二优点)
 - [三、基本使用](#三基本使用)
@@ -63,6 +64,19 @@
   - [5、异常处理](#5异常处理)
 - [五、与 Spring Boot 集成](#五与-spring-boot-集成)
   - [Micrometer 监控](#可选micrometer-监控)
+
+## 环境要求
+
+easy-trans 分为两条版本线，按需选择：
+
+| 版本线 | JDK | Spring Boot | 适用场景 |
+| --- | --- | --- | --- |
+| **2.x**（当前主线，2.0.0+） | **JDK 25**（运行需 JRE 25+，构建需 JDK 25） | **Spring Boot 4.x**（已验证 4.1.0） | 新项目 / 可升级 JDK 与 Spring 的用户 |
+| **1.x**（旧线维护） | **JDK 8+** | **Spring Boot 2.7.x** | 仍停留在 JDK 8 或 Spring Boot 2.7 的用户 |
+
+- 当前主线 **2.x** 要求 **JDK 25 + Spring Boot 4**；若你的项目还停留在 **JDK 8**（或 Spring Boot 2.7），请使用 **1.x** 版本（`easy-trans-core` / `easy-trans-spring-start` 的 `1.x.y`）。
+- `easy-trans-core` 始终保持零第三方依赖，可脱离 Spring 独立使用（仅需 JDK）。
+- **GraalVM Native Image**：需 Spring Boot 4 的 AOT + RuntimeHints（已在 `easy-trans-spring-start` 内置 `EasyTransRuntimeHints`），构建时使用 **JDK 25 + GraalVM for JDK 25**。
 
 ## 一、架构设计
 
@@ -181,7 +195,7 @@ maven引入
 <dependency>
     <groupId>io.github.orangewest</groupId>
     <artifactId>easy-trans-core</artifactId>
-    <version>1.0.0</version>
+    <version>2.0.0</version>
 </dependency>
 ```
 
@@ -816,13 +830,13 @@ maven 引入
 <dependency>
     <groupId>io.github.orangewest</groupId>
     <artifactId>easy-trans-spring-start</artifactId>
-    <version>1.0.0</version>
+    <version>2.0.0</version>
 </dependency>
 ```
 
 ### 自动装配
 
-引入 `easy-trans-spring-start` 后，框架通过 `spring.factories` 自动装配 `EasyTransAutoConfiguration`，无需任何额外配置即可使用：
+引入 `easy-trans-spring-start` 后，框架通过 Spring Boot 自动配置（2.x 为 `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`，1.x 为 `spring.factories`）装配 `EasyTransAutoConfiguration`，无需任何额外配置即可使用：
 
 - 自动创建并 `init()` 一个 `TransService`（单例，`@ConditionalOnMissingBean` 可覆盖）；
 - 自动扫描容器中所有 `TransRepository`、`TransObjResolver`、`DictLoader` 实现类并注册（标注 `@Component` 即可，无需手动 `register`）；

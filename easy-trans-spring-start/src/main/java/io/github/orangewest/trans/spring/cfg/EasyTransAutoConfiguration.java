@@ -33,7 +33,7 @@ public class EasyTransAutoConfiguration {
     }
 
     @Bean
-    public EasyTransRegister easyTransRegister() {
+    public static EasyTransRegister easyTransRegister() {
         return new EasyTransRegister();
     }
 
