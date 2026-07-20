@@ -35,7 +35,8 @@ public class TransService {
 
     public void init() {
         if (this.executor == null) {
-            this.executor = Executors.newCachedThreadPool(r -> new Thread(r, "trans-thread-" + r.hashCode()));
+            this.executor = Executors.newThreadPerTaskExecutor(
+                    Thread.ofVirtual().name("trans-", 0).factory());
         }
         isInit = true;
     }
