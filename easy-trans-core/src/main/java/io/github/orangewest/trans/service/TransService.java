@@ -6,8 +6,10 @@ import io.github.orangewest.trans.core.TransModel;
 import io.github.orangewest.trans.core.TransRepoMeta;
 import io.github.orangewest.trans.exception.TransException;
 import io.github.orangewest.trans.manager.TransClassMetaCacheManager;
+import io.github.orangewest.trans.metrics.TransMetricContext;
 import io.github.orangewest.trans.metrics.TransMetrics;
 import io.github.orangewest.trans.metrics.TransMetricsCollector;
+import io.github.orangewest.trans.metrics.TransMetricsOperations;
 import io.github.orangewest.trans.repository.TransRepository;
 import io.github.orangewest.trans.repository.TransRepositoryFactory;
 import io.github.orangewest.trans.repository.DefaultTransContext;
@@ -69,19 +71,24 @@ public class TransService {
         if (objClass.getName().startsWith("java.")) {
             return false;
         }
-        TransMetrics.Sample sample = TransMetricsCollector.get().startTranslate();
+        TransMetricContext translateContext = TransMetricContext.builder(TransMetricsOperations.TRANSLATE)
+                .targetClass(objClass)
+                .depth(0)
+                .build();
+        TransMetrics.Span translateSpan = TransMetricsCollector.get()
+                .startSpan(TransMetricsOperations.TRANSLATE, translateContext);
         try {
             TransClassMeta info = TransClassMetaCacheManager.getTransClassMeta(objClass);
             if (!info.needTrans()) {
                 return false;
             }
-            doTrans(objList, info.getTransFieldList());
+            doTrans(objList, info.getTransFieldList(), translateSpan, objClass, 0);
             return true;
         } catch (Throwable t) {
-            sample.error(t);
+            translateSpan.recordException(t);
             throw t;
         } finally {
-            sample.stop();
+            translateSpan.end();
         }
     }
 
@@ -105,7 +112,8 @@ public class TransService {
         return resolvedObj;
     }
 
-    private void doTrans(List<Object> objList, List<TransFieldMeta> transFieldMetaList) {
+    private void doTrans(List<Object> objList, List<TransFieldMeta> transFieldMetaList,
+                         TransMetrics.Span parentSpan, Class<?> targetClass, int parentDepth) {
         Map<TransRepoMeta, List<TransFieldMeta>> listMap = transFieldMetaList.stream().collect(Collectors.groupingBy(TransFieldMeta::getTransRepoMeta));
         if (listMap.size() > 1) {
             List<Throwable> errors = Collections.synchronizedList(new ArrayList<>());
@@ -114,7 +122,7 @@ public class TransService {
                                     .stream()
                                     .map(entry -> CompletableFuture.runAsync(() -> {
                                         try {
-                                            doTrans(objList, entry.getKey(), entry.getValue());
+                                            doTrans(objList, entry.getKey(), entry.getValue(), parentSpan, targetClass, parentDepth);
                                         } catch (Throwable t) {
                                             errors.add(t);
                                         }
@@ -126,11 +134,13 @@ public class TransService {
                 throw new TransException("Translation failed: " + cause.getMessage(), cause);
             }
         } else {
-            listMap.forEach((transRepoMeta, transFields) -> doTrans(objList, transRepoMeta, transFields));
+            listMap.forEach((transRepoMeta, transFields) ->
+                    doTrans(objList, transRepoMeta, transFields, parentSpan, targetClass, parentDepth));
         }
     }
 
-    private void doTrans(List<Object> objList, TransRepoMeta transRepoMeta, List<TransFieldMeta> transFields) {
+    private void doTrans(List<Object> objList, TransRepoMeta transRepoMeta, List<TransFieldMeta> transFields,
+                         TransMetrics.Span parentSpan, Class<?> targetClass, int parentDepth) {
         // 获取翻译仓库
         TransRepository<Object, Object> transRepository = TransRepositoryFactory.getTransRepository(transRepoMeta.getRepository());
         if (transRepository == null) {
@@ -138,24 +148,70 @@ public class TransService {
                     + (transRepoMeta.getRepository() == null ? "null" : transRepoMeta.getRepository().getName())
                     + ". Register it via TransRepositoryFactory.register(...) or mark it as a @Component in Spring.");
         }
-        List<TransModel> needTransList = toNeedTransList(objList, transFields);
-        if (CollectionUtils.isNotEmpty(needTransList)) {
-            TransMetrics.Sample sample = TransMetricsCollector.get()
-                    .startRepository(transRepoMeta.getRepoName());
-            try {
-                doTrans_0(transRepository, transRepoMeta, needTransList);
-            } catch (Throwable t) {
-                sample.error(t);
-                throw t;
-            } finally {
-                sample.stop();
+        int repoDepth = parentDepth + 1;
+        TransMetrics.Span repoSpan = startRepoSpan(transRepoMeta, targetClass, parentSpan, repoDepth);
+        try {
+            List<TransModel> needTransList = toNeedTransList(objList, transFields);
+            if (CollectionUtils.isNotEmpty(needTransList)) {
+                Map<Object, Object> transValueMap = transRepository.getTransValueMap(
+                        needTransList.stream().map(TransModel::getMultipleTransVal).flatMap(Collection::stream).distinct().collect(Collectors.toList()),
+                        new DefaultTransContext(transRepoMeta.getRepoName(), transRepoMeta.getAttributes()));
+                if (CollectionUtils.isNotEmpty(transValueMap)) {
+                    Map<TransFieldMeta, List<TransModel>> byField = needTransList.stream()
+                            .collect(Collectors.groupingBy(TransModel::getTransField));
+                    int fieldDepth = repoDepth + 1;
+                    for (TransFieldMeta transField : transFields) {
+                        List<TransModel> fieldModels = byField.get(transField);
+                        if (CollectionUtils.isEmpty(fieldModels)) {
+                            continue;
+                        }
+                        TransMetrics.Span fieldSpan = startFieldSpan(transField, transRepoMeta, targetClass, repoSpan, fieldDepth);
+                        try {
+                            fieldModels.forEach(transModel -> transModel.fillValue(transValueMap));
+                            if (CollectionUtils.isNotEmpty(transField.getChildren())) {
+                                // 嵌套翻译：parent 指向上层 field Span，depth 递增
+                                doTrans(objList, transField.getChildren(), fieldSpan, targetClass, fieldDepth);
+                            }
+                        } catch (Throwable t) {
+                            fieldSpan.recordException(t);
+                            throw t;
+                        } finally {
+                            fieldSpan.end();
+                        }
+                    }
+                }
             }
+        } catch (Throwable t) {
+            repoSpan.recordException(t);
+            throw t;
+        } finally {
+            repoSpan.end();
         }
-        for (TransFieldMeta transField : transFields) {
-            if (CollectionUtils.isNotEmpty(transField.getChildren())) {
-                doTrans(objList, transField.getChildren());
-            }
-        }
+    }
+
+    private TransMetrics.Span startRepoSpan(TransRepoMeta transRepoMeta, Class<?> targetClass,
+                                            TransMetrics.Span parentSpan, int depth) {
+        TransMetricContext context = TransMetricContext.builder(TransMetricsOperations.REPOSITORY)
+                .parent(parentSpan)
+                .depth(depth)
+                .targetClass(targetClass)
+                .repoName(transRepoMeta.getRepoName())
+                .repositoryClass(transRepoMeta.getRepository())
+                .build();
+        return TransMetricsCollector.get().startSpan(TransMetricsOperations.REPOSITORY, context);
+    }
+
+    private TransMetrics.Span startFieldSpan(TransFieldMeta transField, TransRepoMeta transRepoMeta, Class<?> targetClass,
+                                             TransMetrics.Span parentSpan, int depth) {
+        TransMetricContext context = TransMetricContext.builder(TransMetricsOperations.FIELD)
+                .parent(parentSpan)
+                .depth(depth)
+                .targetClass(targetClass)
+                .fieldName(transField.getField().getName())
+                .repoName(transRepoMeta.getRepoName())
+                .repositoryClass(transRepoMeta.getRepository())
+                .build();
+        return TransMetricsCollector.get().startSpan(TransMetricsOperations.FIELD, context);
     }
 
     /**
@@ -172,14 +228,6 @@ public class TransService {
                 .collect(Collectors.toList());
     }
 
-
-    private void doTrans_0(TransRepository<Object, Object> transRepository, TransRepoMeta transRepoMeta, List<TransModel> transModels) {
-        List<Object> transValues = transModels.stream().map(TransModel::getMultipleTransVal).flatMap(Collection::stream).distinct().collect(Collectors.toList());
-        Map<Object, Object> transValueMap = transRepository.getTransValueMap(transValues,
-                new DefaultTransContext(transRepoMeta.getRepoName(), transRepoMeta.getAttributes()));
-        if (CollectionUtils.isNotEmpty(transValueMap)) {
-            transModels.forEach(transModel -> transModel.fillValue(transValueMap));
-        }
-    }
-
 }
+
+

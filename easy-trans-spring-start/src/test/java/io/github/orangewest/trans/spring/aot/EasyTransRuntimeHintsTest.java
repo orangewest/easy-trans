@@ -4,6 +4,9 @@ import io.github.orangewest.trans.annotation.DictTransRepo;
 import io.github.orangewest.trans.annotation.Trans;
 import io.github.orangewest.trans.annotation.TransRepo;
 import io.github.orangewest.trans.annotation.TransRepos;
+import io.github.orangewest.trans.metrics.TransMetricContext;
+import io.github.orangewest.trans.metrics.TransMetrics;
+import io.github.orangewest.trans.metrics.TransMetricsOperations;
 import io.github.orangewest.trans.repository.TransContext;
 import io.github.orangewest.trans.repository.TransRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -19,6 +22,7 @@ import java.lang.annotation.Target;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -68,6 +72,67 @@ class EasyTransRuntimeHintsTest {
         //    ReflectUtils.extractAnnotationAttributes 在解析期反射调用其自有属性（如 group()），
         //    缺少该 hint 会在 Native Image 下抛 InaccessibleObjectException。
         assertAnnotationMethodAccess(registered, MyTransField.class);
+    }
+
+    /**
+     * 验证「自定义 TransMetrics 后端」在 AOT 下是干净可注册的：
+     * <ul>
+     *     <li>{@link TransMetricContext} 由框架在运行期经 builder 纯 Java 构造（无反射），
+     *         无需任何额外 reflection hint；</li>
+     *     <li>自定义后端作为普通类被实例化调用，不依赖 easy-trans 的 hint，native image 下 AOT-clean。</li>
+     * </ul>
+     */
+    @Test
+    void customTransMetricsBackendIsAotClean() {
+        RuntimeHints hints = new RuntimeHints();
+        new EasyTransRuntimeHints().registerHints(hints, getClass().getClassLoader());
+
+        // 1. 自定义后端是普通类，实例化 + 调用无需任何反射 hint
+        CustomBackend backend = new CustomBackend();
+        TransMetricContext context = TransMetricContext.builder(TransMetricsOperations.FIELD)
+                .targetClass(SimpleDto.class)
+                .repoName("sexRepo")
+                .fieldName("sexName")
+                .depth(2)
+                .build();
+        TransMetrics.Span span = backend.startSpan(TransMetricsOperations.FIELD, context);
+        span.end();
+        assertTrue(backend.started.get() > 0, "自定义后端应被调用");
+        assertEquals(2, context.getDepth());
+
+        // 2. metrics 路径不应引入额外的 TransMetricContext reflection hint
+        //    （ADR-0002：EasyTransRuntimeHints 无需为 metrics 新增 hint）
+        boolean hasMetricContextHint = hints.reflection().typeHints()
+                .anyMatch(h -> h.getType().getName().equals(TransMetricContext.class.getName()));
+        assertTrue(!hasMetricContextHint,
+                "TransMetricContext 运行期纯 Java 构造，不应需要 reflection hint");
+    }
+
+    /** 用于 AOT 校验的自定义后端：普通 Java 类，无反射依赖。 */
+    static class CustomBackend implements TransMetrics {
+        final AtomicInteger started = new AtomicInteger();
+
+        @Override
+        public Span startSpan(String operation, TransMetricContext context) {
+            started.incrementAndGet();
+            return new Span() {
+                @Override
+                public void setAttribute(String key, String value) {
+                }
+
+                @Override
+                public void recordException(Throwable t) {
+                }
+
+                @Override
+                public void end() {
+                }
+            };
+        }
+
+        @Override
+        public void increment(String operation, TransMetricContext context, long n) {
+        }
     }
 
     private void assertDtoFieldAccess(Map<String, Set<MemberCategory>> registered, Class<?> dto) {
