@@ -38,6 +38,8 @@ public class TransFieldMeta {
         this.transRepoMeta = transRepoMeta;
         this.fieldType = transRepoMeta.isMultiple() ?
                 ReflectUtils.getFieldParameterizedType(field) : ReflectUtils.getWrapperClass(field.getType());
+        // 解析期一次性 setAccessible（ADR-0003）：运行期 getFieldValue/setFieldValue 不再重复检查
+        ReflectUtils.setAccessible(field);
     }
 
     public Field getField() {

@@ -8,12 +8,27 @@ import java.lang.reflect.Field;
 import java.lang.reflect.ParameterizedType;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.Optional;
 
 public class ReflectUtils {
 
     public static final Map<Class<?>, Class<?>> WRAPPER_PRIMITIVE_MAP = new ConcurrentHashMap<>(8);
 
     public static final Map<Class<?>, Class<?>> PRIMITIVE_WRAPPER_MAP = new ConcurrentHashMap<>(8);
+
+    /**
+     * key 字段懒缓存的复合键：运行期类 + 要提取的 key 字段名。
+     * 同一 {@code R} 类型可能被多个目标字段以不同 {@code key} 提取（如 {@code CityEntity} 同时被取 {@code name}/{@code pid}），
+     * 故缓存键须同时含 key 名，否则会串味（见 ADR-0003）。
+     */
+    private record KeyField(Class<?> clazz, String key) {
+    }
+
+    /**
+     * key 字段懒缓存：复合键 -> 该类的 key 字段（已 setAccessible）。
+     * 值为 {@link Optional} 以兼容「该类无 key 字段」(null) 的缓存，避免 {@code computeIfAbsent} 禁用的 null value。
+     */
+    private static final Map<KeyField, Optional<Field>> KEY_FIELD_CACHE = new ConcurrentHashMap<>();
 
     static {
         WRAPPER_PRIMITIVE_MAP.put(Boolean.class, boolean.class);
@@ -83,21 +98,21 @@ public class ReflectUtils {
         return result;
     }
 
+    /**
+     * 读取字段值。调用方传入的 field 必须在解析期 / 懒缓存期已 {@link #setAccessible(AccessibleObject)}，
+     * 因此此处不再重复 setAccessible（热路径去重，见 ADR-0003）。
+     */
     public static Object getFieldValue(Object obj, Field field) {
         if (null == field) {
             return null;
-        } else {
-            if (obj instanceof Class) {
-                obj = null;
-            }
-
-            setAccessible(field);
-
-            try {
-                return field.get(obj);
-            } catch (IllegalAccessException e) {
-                return null;
-            }
+        }
+        if (obj instanceof Class) {
+            obj = null;
+        }
+        try {
+            return field.get(obj);
+        } catch (IllegalAccessException e) {
+            return null;
         }
     }
 
@@ -107,8 +122,11 @@ public class ReflectUtils {
         }
     }
 
+    /**
+     * 写入字段值。调用方传入的 field 必须在解析期 / 懒缓存期已 {@link #setAccessible(AccessibleObject)}，
+     * 因此此处不再重复 setAccessible（热路径去重，见 ADR-0003）。
+     */
     public static void setFieldValue(Object obj, Field field, Object fieldValue) {
-        setAccessible(field);
         try {
             field.set(obj, fieldValue);
         } catch (IllegalAccessException ignored) {
@@ -116,22 +134,56 @@ public class ReflectUtils {
     }
 
     /**
-     * @param bean 对象
-     * @return 对象转Map
+     * 从翻译结果值 {@code value} 中取出 {@code key} 指定的那一个子字段值。
+     *
+     * <p>取代 {@code beanToMap}：只为取一个字段而反射遍历整个对象所有字段。语义等价且只读取需要的字段：
+     * <ul>
+     *   <li>若 {@code value} 是 {@code Map}：直接 {@code map.get(key)}（保留原 {@code beanToMap} 对 Map 返回值的短路）；</li>
+     *   <li>否则：按 {@code value} 的<b>实际运行期类</b>从 {@link #KEY_FIELD_CACHE} 懒取 key 字段
+     *       （复刻 {@link #getAllField} 的跨父类遍历），首次遇到该类时 {@code setAccessible} 一次并缓存，随后 {@code field.get(value)}。</li>
+     * </ul>
+     *
+     * <p>key 字段的类在解析期未知（取决于仓库返回的 {@code R}），故缓存须按运行期类维度建立。
+     *
+     * @param value 翻译结果对象（或 Map）
+     * @param key   要提取的子字段名
+     * @return key 字段值；value 为 null / key 字段不存在时返回 null
      */
-    public static Map<?, ?> beanToMap(Object bean) {
-        if (bean == null) {
-            return Collections.emptyMap();
+    public static Object readValueByKey(Object value, String key) {
+        if (value == null) {
+            return null;
         }
-        if (bean instanceof Map) {
-            return (Map<?, ?>) bean;
+        if (value instanceof Map<?, ?> map) {
+            return map.get(key);
         }
-        List<Field> fields = getAllField(bean.getClass());
-        Map<String, Object> map = new HashMap<>(fields.size());
-        for (Field field : fields) {
-            map.put(field.getName(), getFieldValue(bean, field));
+        Field field = KEY_FIELD_CACHE.computeIfAbsent(new KeyField(value.getClass(), key), k -> Optional.ofNullable(findKeyField(k.clazz(), k.key())))
+                .orElse(null);
+        if (field == null) {
+            return null;
         }
-        return map;
+        try {
+            return field.get(value);
+        } catch (IllegalAccessException e) {
+            return null;
+        }
+    }
+
+    /**
+     * 跨父类查找名为 {@code key} 的字段（复刻 {@link #getAllField} 的层级遍历），找到则 setAccessible 一次后返回。
+     *
+     * @return key 字段；未找到返回 null
+     */
+    private static Field findKeyField(Class<?> clazz, String key) {
+        for (Class<?> c = clazz; c != null && c != Object.class; c = c.getSuperclass()) {
+            try {
+                Field f = c.getDeclaredField(key);
+                setAccessible(f);
+                return f;
+            } catch (NoSuchFieldException ignored) {
+                // 当前类无此字段，继续向上找父类
+            }
+        }
+        return null;
     }
 
     public static boolean isPrimitiveWrapper(Class<?> clazz) {
