@@ -129,10 +129,6 @@ class EasyTransRuntimeHintsTest {
                 }
             };
         }
-
-        @Override
-        public void increment(String operation, TransMetricContext context, long n) {
-        }
     }
 
     private void assertDtoFieldAccess(Map<String, Set<MemberCategory>> registered, Class<?> dto) {

@@ -29,9 +29,4 @@ public class NoopTransMetrics implements TransMetrics {
         return NOOP_SPAN;
     }
 
-    @Override
-    public void increment(String operation, TransMetricContext context, long n) {
-        // no-op
-    }
-
 }

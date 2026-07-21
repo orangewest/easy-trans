@@ -46,10 +46,6 @@ class EasyTransRegisterTest {
                 }
             };
         }
-
-        @Override
-        public void increment(String operation, TransMetricContext context, long n) {
-        }
     }
 
     static class NameRepo implements TransRepository<Long, String> {

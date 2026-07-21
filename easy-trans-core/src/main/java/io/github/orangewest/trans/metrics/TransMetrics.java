@@ -20,15 +20,6 @@ public interface TransMetrics {
     Span startSpan(String operation, TransMetricContext context);
 
     /**
-     * 计数（设计预留，本期引擎暂不接任何埋点）。
-     *
-     * @param operation 测量点类型，见 {@link TransMetricsOperations}
-     * @param context   语义上下文
-     * @param n         计数值
-     */
-    void increment(String operation, TransMetricContext context, long n);
-
-    /**
      * 一次测量点的句柄。实现可在 start 与 end 之间记录耗时、错误、附加属性等信息。
      */
     interface Span {

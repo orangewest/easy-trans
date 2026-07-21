@@ -46,11 +46,6 @@ public class TransMetricsMicrometer implements TransMetrics {
         return new ObservationSample(observation);
     }
 
-    @Override
-    public void increment(String operation, TransMetricContext context, long n) {
-        // 计数器本期仅设计预留，引擎未接埋点；此处空操作。
-    }
-
     private static final class ObservationSample implements Span {
 
         private final Observation observation;

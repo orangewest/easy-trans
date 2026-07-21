@@ -66,11 +66,6 @@ class TransMetricsTest {
             return span;
         }
 
-        @Override
-        public void increment(String operation, TransMetricContext context, long n) {
-            // 本期引擎未接计数器埋点，录制实现同样空操作。
-        }
-
         SpanRecord findBySpan(Span span) {
             return spans.stream().filter(r -> r.span == span).findFirst().orElse(null);
         }
@@ -226,10 +221,5 @@ class TransMetricsTest {
         }
     }
 
-    @Test
-    void increment_is_noop_safe_when_not_wired() {
-        // 即便引擎本期未接计数器，接口调用也应安全（Noop 下已在 reset 中验证；此处验证录制实现不抛异常）
-        recording.increment(TransMetricsOperations.FIELD,
-                TransMetricContext.builder(TransMetricsOperations.FIELD).depth(2).build(), 3);
-    }
+
 }
