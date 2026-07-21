@@ -6,8 +6,8 @@ import java.util.Date;
 /**
  * 基础实体类：所有数据库实体都应继承它，复用主键与审计字段。
  *
- * <p>本 demo 使用原生 MyBatis（未引入 MyBatis-Plus），故这里只是普通 POJO；
- * 若项目使用 MyBatis-Plus，可在此加上 {@code @TableId} / {@code @TableField} 等注解。
+ * <p>本 demo 使用 MyBatis-Plus，实体上可用 {@code @TableName} / {@code @TableId} 等注解；
+ * 主键 {@code id} 由 mybatis-plus 的 {@code BaseMapper} 通用方法（如 selectBatchIds）使用。
  */
 public abstract class BaseEntity implements Serializable {
 

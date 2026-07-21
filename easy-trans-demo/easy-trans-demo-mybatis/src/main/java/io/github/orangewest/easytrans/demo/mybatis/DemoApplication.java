@@ -3,24 +3,22 @@ package io.github.orangewest.easytrans.demo.mybatis;
 import io.github.orangewest.easytrans.demo.mybatis.dto.UserDto;
 import io.github.orangewest.easytrans.demo.mybatis.service.UserService;
 import io.github.orangewest.trans.service.TransService;
+import com.baomidou.mybatisplus.spring.MybatisSqlSessionFactoryBean;
 import org.apache.ibatis.session.SqlSessionFactory;
-import org.mybatis.spring.SqlSessionFactoryBean;
 import org.mybatis.spring.SqlSessionTemplate;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
-import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.transaction.PlatformTransactionManager;
 
 import javax.sql.DataSource;
 
 /**
- * MyBatis 集成示例（基于 BaseEntity + DbTransRepo 的通用数据库翻译）：
+ * MyBatis-Plus 集成示例（基于 BaseEntity + DbTransRepo 的通用数据库翻译）：
  * <ul>
  *   <li>DataSource 由 spring-boot-starter-jdbc 自动装配（H2 内存库）</li>
- *   <li>SqlSessionFactory / SqlSessionTemplate 手动装配（本环境 nexus 未提供 mybatis-spring-boot-starter）</li>
+ *   <li>SqlSessionFactory / SqlSessionTemplate 等由 mybatis-plus-spring-boot-starter 自动装配</li>
  *   <li>{@code DbTransRepository}（TransRepository）经 {@code MybatisTransDriver} 查库完成翻译</li>
  * </ul>
  */
@@ -32,9 +30,11 @@ public class DemoApplication {
         SpringApplication.run(DemoApplication.class, args);
     }
 
+    // 旧版 mybatis-plus-boot-starter 面向 Spring Boot 2/3，其自动装配依赖已迁移的
+    // DataSourceAutoConfiguration 排序而在 Spring Boot 4 下失效，故手动声明 MyBatis 相关 Bean。
     @Bean
     public SqlSessionFactory sqlSessionFactory(DataSource dataSource) throws Exception {
-        SqlSessionFactoryBean factoryBean = new SqlSessionFactoryBean();
+        MybatisSqlSessionFactoryBean factoryBean = new MybatisSqlSessionFactoryBean();
         factoryBean.setDataSource(dataSource);
         return factoryBean.getObject();
     }
@@ -45,15 +45,10 @@ public class DemoApplication {
     }
 
     @Bean
-    public PlatformTransactionManager transactionManager(DataSource dataSource) {
-        return new DataSourceTransactionManager(dataSource);
-    }
-
-    @Bean
     CommandLineRunner runner(TransService transService, UserService userService) {
         return args -> {
             try {
-                // 1) 直接调用 TransService.trans（数据来自 MyBatis 查询）
+                // 1) 直接调用 TransService.trans（数据来自 MyBatis-Plus 查询）
                 UserDto u = new UserDto();
                 u.setId(1L);
                 u.setName("张三");

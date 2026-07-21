@@ -18,7 +18,7 @@
         <maven.javadoc.skip>true</maven.javadoc.skip>
         <maven.source.skip>true</maven.source.skip>
         <maven.gpg.skip>true</maven.gpg.skip>
-        <mybatis.version>3.5.19</mybatis.version>
+        <mybatis-plus.version>3.5.17</mybatis-plus.version>
         <mybatis-spring.version>3.0.4</mybatis-spring.version>
         <h2.version>2.4.240</h2.version>
     </properties>
@@ -28,12 +28,16 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-jdbc</artifactId>
         </dependency>
-        <!-- MyBatis 核心 + Spring 整合（本环境 nexus 未提供 mybatis-spring-boot-starter，故手动装配） -->
+        <!-- MyBatis-Plus：BaseMapper 自带 selectBatchIds 等通用方法，无需手写 SqlProvider。
+             注：本 nexus 仅提供旧 artifactId mybatis-plus-boot-starter（无 mybatis-plus-spring-boot-starter），
+             其面向 Spring Boot 2/3，能否在 Spring Boot 4 下运行需实测。 -->
         <dependency>
-            <groupId>org.mybatis</groupId>
-            <artifactId>mybatis</artifactId>
-            <version>${mybatis.version}</version>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-boot-starter</artifactId>
+            <version>${mybatis-plus.version}</version>
         </dependency>
+        <!-- Spring Boot 4 / Spring 7 需要 mybatis-spring 3.0.4+，
+             否则 MapperFactoryBean 会以 String 写入 factoryBeanObjectType 属性导致启动失败 -->
         <dependency>
             <groupId>org.mybatis</groupId>
             <artifactId>mybatis-spring</artifactId>

@@ -1,44 +1,31 @@
 package io.github.orangewest.easytrans.demo.mybatis.driver;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.baomidou.mybatisplus.extension.toolkit.SqlHelper;
 import io.github.orangewest.easytrans.demo.mybatis.entity.BaseEntity;
-import io.github.orangewest.easytrans.demo.mybatis.entity.Teacher;
-import io.github.orangewest.easytrans.demo.mybatis.mapper.BaseMapper;
-import io.github.orangewest.easytrans.demo.mybatis.mapper.TeacherMapper;
-import org.mybatis.spring.SqlSessionTemplate;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.apache.ibatis.session.SqlSession;
 import org.springframework.stereotype.Component;
 
 import java.io.Serializable;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
- * MyBatis 实现的 {@link TransDriver}：通过注册表找到实体对应的 {@link BaseMapper}，按 ids 查库。
+ * MyBatis-Plus 实现的 {@link TransDriver}：借助 MyBatis-Plus 的 {@link SqlHelper}，
+ * 按实体类直接获取对应的 {@link BaseMapper} 与 {@link SqlSession}，
+ * 无需手工维护「实体类 → Mapper」的注册表。
  *
- * <p>新增实体时，只需让其 Mapper 继承 {@code BaseMapper<T>} 并在此注册表登记即可。
+ * <p>新增实体时，只需提供继承 {@code BaseMapper<T>} 的 Mapper（如 {@code TeacherMapper}），
+ * 本驱动即可自动按实体类定位它；旧的 {@code MAPPER_REGISTRY} 手工登记方式容易漏登、出错。
  */
 @Component
 public class MybatisTransDriver implements TransDriver {
 
-    @Autowired
-    private SqlSessionTemplate sqlSessionTemplate;
-
-    /** 实体类 -> 对应 Mapper 接口（泛型 BaseMapper 的映射注册表） */
-    private final Map<Class<? extends BaseEntity>, Class<? extends BaseMapper<?>>> MAPPER_REGISTRY = new HashMap<>();
-
-    public MybatisTransDriver() {
-        MAPPER_REGISTRY.put(Teacher.class, TeacherMapper.class);
-    }
-
     @Override
     @SuppressWarnings("unchecked")
     public List<? extends BaseEntity> findByIds(List<? extends Serializable> ids, Class<? extends BaseEntity> targetClass) {
-        Class<? extends BaseMapper<?>> mapperClass = MAPPER_REGISTRY.get(targetClass);
-        if (mapperClass == null) {
-            throw new IllegalStateException("未注册实体 " + targetClass.getName() + " 对应的 Mapper");
+        try (SqlSession sqlSession = SqlHelper.sqlSession(targetClass)) {
+            BaseMapper<? extends BaseEntity> mapper = SqlHelper.getMapper(targetClass, sqlSession);
+            return mapper.selectBatchIds(ids);
         }
-        BaseMapper<?> mapper = sqlSessionTemplate.getMapper(mapperClass);
-        return mapper.selectBatchIds((List<Serializable>) ids);
     }
 }

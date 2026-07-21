@@ -1,8 +1,11 @@
 package io.github.orangewest.easytrans.demo.mybatis.entity;
 
+import com.baomidou.mybatisplus.annotation.TableName;
+
 /**
  * 数据库实体，对应 {@code teacher} 表。继承 {@link BaseEntity}，复用 id/creator/createDate。
  */
+@TableName("teacher")
 public class Teacher extends BaseEntity {
 
     private String name;
