@@ -6,9 +6,7 @@ import io.github.orangewest.trans.annotation.TransRepo;
 import io.github.orangewest.trans.repository.DeptTransRepository;
 import io.github.orangewest.trans.repository.SubjectTransRepository;
 import io.github.orangewest.trans.repository.TeacherTransRepository;
-import lombok.Data;
 
-@Data
 public class UserDto {
 
     private Long id;
@@ -52,5 +50,53 @@ public class UserDto {
         this.sex = sex;
         this.job = job;
         this.deptCode = deptCode;
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public String getSex() {
+        return sex;
+    }
+
+    public String getSexName() {
+        return sexName;
+    }
+
+    public String getJob() {
+        return job;
+    }
+
+    public String getJobName() {
+        return jobName;
+    }
+
+    public Long getTeacherId() {
+        return teacherId;
+    }
+
+    public String getTeacherName() {
+        return teacherName;
+    }
+
+    public Long getSubjectId() {
+        return subjectId;
+    }
+
+    public String getSubjectName() {
+        return subjectName;
+    }
+
+    public String getDeptCode() {
+        return deptCode;
+    }
+
+    public String getDeptName() {
+        return deptName;
     }
 }
