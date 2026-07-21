@@ -1,16 +1,24 @@
 package io.github.orangewest.trans.dto;
 
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
-@Data
-@AllArgsConstructor
-@NoArgsConstructor
 public class SubjectDto {
 
     private Long id;
 
     private String name;
 
+    public SubjectDto() {
+    }
+
+    public SubjectDto(Long id, String name) {
+        this.id = id;
+        this.name = name;
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public String getName() {
+        return name;
+    }
 }

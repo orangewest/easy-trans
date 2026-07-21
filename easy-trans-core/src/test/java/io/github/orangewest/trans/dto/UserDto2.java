@@ -5,17 +5,14 @@ import io.github.orangewest.trans.annotation.DictTransRepo;
 import io.github.orangewest.trans.annotation.Trans;
 import io.github.orangewest.trans.annotation.TransRepo;
 import io.github.orangewest.trans.repository.SubjectTransRepository;
-import lombok.Data;
 
 import java.util.List;
 
-@Data
 public class UserDto2 {
 
     private Long id;
 
     private String name;
-
 
     @TeacherTransRepo
     private List<Long> teacherIds;
@@ -41,5 +38,37 @@ public class UserDto2 {
         this.name = name;
         this.teacherIds = teacherIds;
         this.jobIds = jobIds;
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public List<Long> getTeacherIds() {
+        return teacherIds;
+    }
+
+    public List<String> getJobIds() {
+        return jobIds;
+    }
+
+    public List<String> getJobNames() {
+        return jobNames;
+    }
+
+    public List<String> getTeacherName() {
+        return teacherName;
+    }
+
+    public List<Long> getSubjectIds() {
+        return subjectIds;
+    }
+
+    public List<String> getSubjectNames() {
+        return subjectNames;
     }
 }
