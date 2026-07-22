@@ -12,7 +12,7 @@ import java.util.function.Function;
  *
  * <p>本类引用 reactor，故为「可选依赖」路径：仅当 reactor 位于 classpath 时，由
  * {@code EasyTransAutoConfiguration} 经 {@code @ConditionalOnClass} 注入为 Spring Bean，并由
- * {@code EasyTransRegister} 注册进 {@link TransValueResolverFactory}，使 core 引擎与 {@link TransUtil}
+ * {@code EasyTransRegister} 注册进 {@code TransValueResolverFactory}，使 core 引擎与 {@code TransUtil}
  * 不静态依赖 reactor，保证纯 MVC 应用打 GraalVM Native 镜像不会因缺少 reactor 而构建失败。
  */
 public class ReactorTransResolver implements TransValueResolver {
