@@ -14,6 +14,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.aot.hint.MemberCategory;
 import org.springframework.aot.hint.RuntimeHints;
 import org.springframework.aot.hint.TypeHint;
+import org.springframework.util.ClassUtils;
+
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -72,6 +76,7 @@ class EasyTransRuntimeHintsTest {
         //    ReflectUtils.extractAnnotationAttributes 在解析期反射调用其自有属性（如 group()），
         //    缺少该 hint 会在 Native Image 下抛 InaccessibleObjectException。
         assertAnnotationMethodAccess(registered, MyTransField.class);
+
     }
 
     /**

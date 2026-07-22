@@ -133,9 +133,8 @@ class TransMetricsTest {
     void records_three_level_span_chain() {
         TransService service = new TransService();
         MetricsDto dto = new MetricsDto(1L);
-        boolean result = service.trans(dto);
+        service.trans(dto);
 
-        assertTrue(result);
         assertEquals("name-1", dto.name);
 
         // translate（根，depth=0，parent=null）

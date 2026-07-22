@@ -11,7 +11,7 @@ public class AutoTransAspect {
     @Around("@annotation(io.github.orangewest.trans.spring.annotation.AutoTrans)")
     public Object around(ProceedingJoinPoint joinPoint) throws Throwable {
         Object result = joinPoint.proceed();
-        return TransUtil.transResult(result);
+        return TransUtil.trans(result);
     }
 
 }

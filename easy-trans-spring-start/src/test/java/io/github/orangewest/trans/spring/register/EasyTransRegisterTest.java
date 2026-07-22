@@ -97,7 +97,7 @@ class EasyTransRegisterTest {
 
         TransService service = new TransService();
         Dto dto = new Dto(1L);
-        assertTrue(service.trans(dto));
+        service.trans(dto);
         assertEquals("name-1", dto.name);
 
         assertTrue(backend.spanStarts.get() > 0, "自定义后端应在翻译时被实际调用（录制到 Span）");
@@ -109,7 +109,7 @@ class EasyTransRegisterTest {
         TransMetricsCollector.set(backend);
 
         TransService service = new TransService();
-        assertTrue(service.trans(new Dto(2L)));
+        service.trans(new Dto(2L));
 
         assertTrue(backend.spanStarts.get() > 0, "经 set 注入的自定义后端应在翻译时被实际调用");
     }

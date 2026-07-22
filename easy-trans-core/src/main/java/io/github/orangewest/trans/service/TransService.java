@@ -13,8 +13,8 @@ import io.github.orangewest.trans.metrics.TransMetricsOperations;
 import io.github.orangewest.trans.repository.TransRepository;
 import io.github.orangewest.trans.repository.TransRepositoryFactory;
 import io.github.orangewest.trans.repository.DefaultTransContext;
-import io.github.orangewest.trans.resolver.TransObjResolver;
-import io.github.orangewest.trans.resolver.TransObjResolverFactory;
+import io.github.orangewest.trans.resolver.TransValueResolver;
+import io.github.orangewest.trans.resolver.TransValueResolverFactory;
 import io.github.orangewest.trans.util.CollectionUtils;
 
 import java.util.ArrayList;
@@ -55,21 +55,29 @@ public class TransService {
     }
 
     /**
-     * @param obj 需要被翻译的对象
-     * @return 是否翻译成功
+     * @param obj 需要被翻译的对象或返回值（支持同步对象、{@code Result} 等包装、{@code CompletableFuture}、
+     *            {@code Mono}/{@code Flux} 等——由已注册的 {@link TransValueResolver} 适配）
+     * @return 翻译后的对象（入参原对象，已就地填充翻译字段；obj 为 null 时返回 null）
      */
-    public boolean trans(Object obj) {
-        obj = resolveObj(obj);
+    public Object trans(Object obj) {
         if (obj == null) {
-            return false;
+            return null;
         }
+        TransValueResolver adapter = TransValueResolverFactory.firstSupports(obj);
+        if (adapter != null) {
+            return adapter.handle(obj, this::trans);
+        }
+        return translateCore(obj);
+    }
+
+    private Object translateCore(Object obj) {
         List<Object> objList = CollectionUtils.objToList(obj);
         if (CollectionUtils.isEmpty(objList)) {
-            return false;
+            return obj;
         }
         Class<?> objClass = objList.get(0).getClass();
         if (objClass.getName().startsWith("java.")) {
-            return false;
+            return obj;
         }
         TransMetricContext translateContext = TransMetricContext.builder(TransMetricsOperations.TRANSLATE)
                 .targetClass(objClass)
@@ -80,36 +88,16 @@ public class TransService {
         try {
             TransClassMeta info = TransClassMetaCacheManager.getTransClassMeta(objClass);
             if (!info.needTrans()) {
-                return false;
+                return obj;
             }
             doTrans(objList, info.getTransFieldList(), translateSpan, objClass, 0);
-            return true;
+            return obj;
         } catch (Throwable t) {
             translateSpan.recordException(t);
             throw t;
         } finally {
             translateSpan.end();
         }
-    }
-
-    private Object resolveObj(Object obj) {
-        if (obj == null) {
-            return null;
-        }
-        List<TransObjResolver> resolvers = TransObjResolverFactory.getResolvers();
-        boolean resolve = false;
-        Object resolvedObj = obj;
-        for (TransObjResolver resolver : resolvers) {
-            if (resolver.support(obj)) {
-                resolvedObj = resolver.resolveTransObj(obj);
-                resolve = true;
-                break;
-            }
-        }
-        if (resolve) {
-            resolvedObj = resolveObj(resolvedObj);
-        }
-        return resolvedObj;
     }
 
     private void doTrans(List<Object> objList, List<TransFieldMeta> transFieldMetaList,

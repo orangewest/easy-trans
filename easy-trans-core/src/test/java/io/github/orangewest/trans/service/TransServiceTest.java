@@ -5,7 +5,7 @@ import io.github.orangewest.trans.repository.*;
 import io.github.orangewest.trans.repository.dict.DictLoader;
 import io.github.orangewest.trans.repository.dict.DictTransRepository;
 import io.github.orangewest.trans.resolver.ResultResolver;
-import io.github.orangewest.trans.resolver.TransObjResolverFactory;
+import io.github.orangewest.trans.resolver.TransValueResolverFactory;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -50,7 +50,7 @@ class TransServiceTest {
             }
 
         }));
-        TransObjResolverFactory.register(new ResultResolver());
+        TransValueResolverFactory.register(new ResultResolver());
     }
 
     @BeforeEach

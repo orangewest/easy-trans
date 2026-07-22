@@ -1,78 +1,32 @@
 package io.github.orangewest.trans.spring.uitl;
 
-
 import io.github.orangewest.trans.service.TransService;
 import org.springframework.beans.BeansException;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
-
-import java.lang.reflect.Method;
-import java.util.concurrent.CompletionStage;
-import java.util.function.Consumer;
-import java.util.function.Function;
 
 public class TransUtil implements ApplicationContextAware {
 
     private static ApplicationContext applicationContext;
 
     /**
-     * 翻译工具
+     * 翻译工具：便捷的静态入口，直接委托给 Spring 容器中持有的 {@link TransService}。
+     * 真正的适配器分发与翻译逻辑都在引擎 {@link TransService#trans(Object)} 中，本类不持有任何翻译逻辑。
      *
-     * @param obj 需要翻译的对象
-     * @return 是否翻译成功
-     */
-    public static boolean trans(Object obj) {
-        return TransServiceHolder.get().trans(obj);
-    }
-
-    /**
-     * 翻译方法返回值。对于异步/响应式包装类型（CompletableFuture、Mono、Flux 等），
-     * 会在其结果就绪后再执行翻译，而不是对包装对象本身翻译（那样会静默失效）。
+     * <p>reactor 解析器（{@code ReactorTransResolver}）仅在 reactor 位于 classpath 时由
+     * {@code EasyTransAutoConfiguration} 经 {@code @ConditionalOnClass} 注入为 Spring Bean，并由
+     * {@code EasyTransRegister} 注册进 {@code TransValueResolverFactory}；core 引擎与 TransUtil 均不静态
+     * 引用 reactor，保证纯 MVC 应用打 GraalVM Native 镜像不会因缺少 reactor 而构建失败。
      *
-     * @param result 方法返回值
-     * @return 原值，或包裹了翻译逻辑的异步/响应式对象
+     * @param result 需要翻译的对象或返回值
+     * @return 翻译后的对象（未注入 TransService 时原样返回）
      */
-    public static Object transResult(Object result) {
-        return transResult(result, TransUtil::trans);
-    }
-
-    /**
-     * 内部方法，允许注入 translator，便于单元测试。
-     */
-    static Object transResult(Object result, Consumer<Object> translator) {
-        if (result == null) {
-            return null;
+    public static Object trans(Object result) {
+        TransService service = TransServiceHolder.get();
+        if (service != null) {
+            return service.trans(result);
         }
-        // 异步返回：CompletableFuture 及其实现的 CompletionStage
-        if (result instanceof CompletionStage) {
-            return ((CompletionStage<Object>) result).thenApply(v -> {
-                translator.accept(v);
-                return v;
-            });
-        }
-        // 响应式返回（Project Reactor）：仅在 classpath 存在时通过反射处理，避免引入硬依赖
-        Object reactorResult = transReactor(result, translator);
-        if (reactorResult != null) {
-            return reactorResult;
-        }
-        // 同步返回（含 Result 等包装对象，由 trans 内部的解析器拆包）
-        translator.accept(result);
         return result;
-    }
-
-    private static Object transReactor(Object result, Consumer<Object> translator) {
-        if (!result.getClass().getName().startsWith("reactor.core.publisher.")) {
-            return null;
-        }
-        try {
-            Method map = result.getClass().getMethod("map", Function.class);
-            return map.invoke(result, (Function<Object, Object>) v -> {
-                translator.accept(v);
-                return v;
-            });
-        } catch (Throwable t) {
-            return null;
-        }
     }
 
     @Override
@@ -80,11 +34,28 @@ public class TransUtil implements ApplicationContextAware {
         TransUtil.applicationContext = applicationContext;
     }
 
+    /**
+     * 懒加载 {@link TransService}：首次调用时从 Spring 容器取 Bean 并缓存，
+     * 不再在类加载时急切初始化（避免容器尚未注入 context 时的 NPE）。
+     */
     static class TransServiceHolder {
-        private static final TransService INSTANCE = applicationContext.getBean(TransService.class);
+        private static volatile TransService INSTANCE;
 
-        public static TransService get() {
-            return INSTANCE;
+        static TransService get() {
+            TransService instance = INSTANCE;
+            if (instance != null) {
+                return instance;
+            }
+            ApplicationContext ctx = applicationContext;
+            if (ctx == null) {
+                return null;
+            }
+            synchronized (TransServiceHolder.class) {
+                if (INSTANCE == null) {
+                    INSTANCE = ctx.getBean(TransService.class);
+                }
+                return INSTANCE;
+            }
         }
     }
 

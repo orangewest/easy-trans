@@ -9,6 +9,7 @@ import io.github.orangewest.trans.spring.aop.AutoTransAspect;
 import io.github.orangewest.trans.spring.metrics.TransMetricsMicrometer;
 import io.github.orangewest.trans.spring.register.EasyTransRegister;
 import io.github.orangewest.trans.repository.enumdict.EnumTransRepository;
+import io.github.orangewest.trans.spring.resolver.ReactorTransResolver;
 import io.github.orangewest.trans.spring.uitl.TransUtil;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -49,6 +50,19 @@ public class EasyTransAutoConfiguration {
     @Bean
     public EnumTransRepository enumTransRepository() {
         return new EnumTransRepository();
+    }
+
+    /**
+     * 响应式翻译解析器（{@code io.github.orangewest.trans.spring.resolver.ReactorTransResolver}）：仅当 classpath
+     * 存在 reactor（WebFlux 应用）时注入为 Spring Bean，由
+     * {@link io.github.orangewest.trans.spring.register.EasyTransRegister} 自动注册进
+     * {@code TransValueResolverFactory}。纯 MVC 应用不含 reactor，该 Bean 不创建，框架退化为
+     * 只处理同步对象与 CompletableFuture。
+     */
+    @Bean
+    @ConditionalOnClass(name = "reactor.core.publisher.Mono")
+    public ReactorTransResolver reactorTransResolver() {
+        return new ReactorTransResolver();
     }
 
     /**

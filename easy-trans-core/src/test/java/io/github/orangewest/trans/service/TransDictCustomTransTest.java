@@ -67,9 +67,8 @@ class TransDictCustomTransTest {
         TransService service = new TransService();
         DictCustomDto dto = new DictCustomDto("1");
 
-        boolean result = service.trans(dto);
+        service.trans(dto);
 
-        assertEquals(true, result);
         assertNotNull(dto.getSexName());
         assertEquals("男", dto.getSexName());
     }
