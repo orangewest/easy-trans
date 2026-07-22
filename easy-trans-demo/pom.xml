@@ -23,6 +23,7 @@
 
     <modules>
         <module>easy-trans-demo-aot</module>
+        <module>easy-trans-demo-webflux</module>
         <module>easy-trans-demo-mybatis</module>
         <module>easy-trans-demo-jpa</module>
     </modules>
