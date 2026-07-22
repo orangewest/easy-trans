@@ -1,7 +1,7 @@
 package io.github.orangewest.trans.dto;
 
 import io.github.orangewest.trans.TeacherTransRepo;
-import io.github.orangewest.trans.annotation.DictTransRepo;
+import io.github.orangewest.trans.annotation.DictTrans;
 import io.github.orangewest.trans.annotation.Trans;
 import io.github.orangewest.trans.annotation.TransRepo;
 import io.github.orangewest.trans.repository.SubjectTransRepository;
@@ -17,10 +17,9 @@ public class UserDto2 {
     @TeacherTransRepo
     private List<Long> teacherIds;
 
-    @DictTransRepo(group = "jobDict")
     private List<String> jobIds;
 
-    @Trans(trans = "jobIds")
+    @DictTrans(group = "jobDict", trans = "jobIds")
     private List<String> jobNames;
 
     @Trans(trans = "teacherIds", key = "name")

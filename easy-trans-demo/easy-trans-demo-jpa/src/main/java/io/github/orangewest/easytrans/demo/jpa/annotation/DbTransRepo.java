@@ -10,7 +10,7 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * 基于数据库的翻译仓库注解（与 {@code @DictTransRepo} 同一套路）：把<b>源字段</b>绑定到
+ * 基于数据库的翻译仓库注解（与 {@code @DictTrans} / {@code @TransRepo} 同一套路）：把<b>源字段</b>绑定到
  * {@link DbTransRepository}，并通过 {@code entity()} 指定要查的数据库实体类。
  *
  * <p>用法：源字段用本注解声明，目标字段用普通 {@code @Trans(trans = 源字段名)} 引用即可。

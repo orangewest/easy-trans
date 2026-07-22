@@ -18,7 +18,7 @@ public class DemoApplication {
     @Bean
     CommandLineRunner runner(TransService transService, UserService userService) {
         return args -> {
-            // 1) 直接调用 TransService.trans（覆盖 @TransRepo/@Trans、@DictTransRepo、对象填充）
+            // 1) 直接调用 TransService.trans（覆盖 @TransRepo/@Trans、@DictTrans、对象填充）
             UserDto u = new UserDto();
             u.setId(1);
             u.setName("张三");

@@ -155,7 +155,8 @@ public class TransService {
             if (CollectionUtils.isNotEmpty(needTransList)) {
                 Map<Object, Object> transValueMap = transRepository.getTransValueMap(
                         needTransList.stream().map(TransModel::getMultipleTransVal).flatMap(Collection::stream).distinct().collect(Collectors.toList()),
-                        new DefaultTransContext(transRepoMeta.getRepoName(), transRepoMeta.getAttributes()));
+                        new DefaultTransContext(transRepoMeta.getRepoName(), transRepoMeta.getAttributes(),
+                                transRepoMeta.getRepoField() != null ? transRepoMeta.getRepoField().getType() : null));
                 if (CollectionUtils.isNotEmpty(transValueMap)) {
                     Map<TransFieldMeta, List<TransModel>> byField = needTransList.stream()
                             .collect(Collectors.groupingBy(TransModel::getTransField));

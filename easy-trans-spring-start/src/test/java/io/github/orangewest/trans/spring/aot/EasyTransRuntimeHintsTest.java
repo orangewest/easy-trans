@@ -1,6 +1,6 @@
 package io.github.orangewest.trans.spring.aot;
 
-import io.github.orangewest.trans.annotation.DictTransRepo;
+import io.github.orangewest.trans.annotation.DictTrans;
 import io.github.orangewest.trans.annotation.Trans;
 import io.github.orangewest.trans.annotation.TransRepo;
 import io.github.orangewest.trans.annotation.TransRepos;
@@ -49,7 +49,7 @@ class EasyTransRuntimeHintsTest {
         Map<String, Set<MemberCategory>> registered = hints.reflection().typeHints()
             .collect(Collectors.toMap(h -> h.getType().getName(), TypeHint::getMemberCategories));
 
-        // 1. DTO 类需有字段读写 hint（含 @Trans / @TransRepo / @DictTransRepo / 重复 @TransRepo / 自定义元注解）
+        // 1. DTO 类需有字段读写 hint（含 @Trans / @TransRepo / @DictTrans / 重复 @TransRepo / 自定义元注解）
         assertDtoFieldAccess(registered, SimpleDto.class);
         assertDtoFieldAccess(registered, DictDto.class);
         assertDtoFieldAccess(registered, RepeatRepoDto.class);
@@ -62,7 +62,7 @@ class EasyTransRuntimeHintsTest {
         // 3. 框架自带注解需有方法调用 hint
         assertAnnotationMethodAccess(registered, Trans.class);
         assertAnnotationMethodAccess(registered, TransRepo.class);
-        assertAnnotationMethodAccess(registered, DictTransRepo.class);
+        assertAnnotationMethodAccess(registered, DictTrans.class);
         assertAnnotationMethodAccess(registered, TransRepos.class);
 
         // 4. 自定义「@TransRepo 元注解」需方法调用 hint（ReflectUtils.invokeAnnotation 反射调用 name()）
@@ -176,8 +176,10 @@ class EasyTransRuntimeHintsTest {
     }
 
     static class DictDto {
-        @DictTransRepo(group = "sex")
         private String sex;
+
+        @DictTrans(group = "sex", trans = "sex")
+        private String sexName;
     }
 
     static class RepeatRepoDto {

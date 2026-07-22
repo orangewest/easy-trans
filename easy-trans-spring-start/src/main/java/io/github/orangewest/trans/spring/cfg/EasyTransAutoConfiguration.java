@@ -8,6 +8,7 @@ import io.github.orangewest.trans.service.TransService;
 import io.github.orangewest.trans.spring.aop.AutoTransAspect;
 import io.github.orangewest.trans.spring.metrics.TransMetricsMicrometer;
 import io.github.orangewest.trans.spring.register.EasyTransRegister;
+import io.github.orangewest.trans.repository.enumdict.EnumTransRepository;
 import io.github.orangewest.trans.spring.uitl.TransUtil;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -43,6 +44,11 @@ public class EasyTransAutoConfiguration {
     @Bean
     public TransUtil transUtil() {
         return new TransUtil();
+    }
+
+    @Bean
+    public EnumTransRepository enumTransRepository() {
+        return new EnumTransRepository();
     }
 
     /**

@@ -38,4 +38,14 @@ public interface TransContext {
      */
     String repoName();
 
+    /**
+     * 源字段的类型（被 {@code @TransRepo} / {@code @EnumTrans} 标注的字段）。
+     * 默认实现返回 {@code null}；框架默认实现会填入真实类型，供仓库（如枚举即字典）推断枚举类。
+     *
+     * @return 源字段类型；无法获取时为 {@code null}
+     */
+    default Class<?> sourceType() {
+        return null;
+    }
+
 }

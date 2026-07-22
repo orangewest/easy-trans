@@ -1,6 +1,6 @@
 package io.github.orangewest.easytrans.demo.dto;
 
-import io.github.orangewest.trans.annotation.DictTransRepo;
+import io.github.orangewest.trans.annotation.DictTrans;
 import io.github.orangewest.trans.annotation.Trans;
 import io.github.orangewest.trans.annotation.TransRepo;
 import io.github.orangewest.easytrans.demo.repository.SexRepository;
@@ -10,7 +10,7 @@ import io.github.orangewest.easytrans.demo.repository.TeacherRepository;
  * 覆盖各翻译注解形态的示例 DTO：
  * <ul>
  *   <li>{@code @TransRepo} + {@code @Trans}（普通仓库翻译）</li>
- *   <li>{@code @DictTransRepo}（字典翻译，需要 DictLoader）</li>
+ *   <li>{@code @DictTrans}（字典翻译，需要 DictLoader）</li>
  *   <li>{@code @Trans(using=...)} 整体对象填充 + 字段提取</li>
  * </ul>
  */
@@ -25,10 +25,9 @@ public class UserDto {
     @Trans(trans = "sex")
     private String sexName;
 
-    @DictTransRepo(group = "sex")
     private String dictSex;
 
-    @Trans(trans = "dictSex")
+    @DictTrans(group = "sex", trans = "dictSex")
     private String dictSexName;
 
     @TransRepo(using = TeacherRepository.class)

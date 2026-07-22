@@ -12,7 +12,7 @@ import java.util.Map;
 public class DemoConfig {
 
     /**
-     * 字典加载器：供 {@code @DictTransRepo} 使用。
+     * 字典加载器：供 {@code @DictTrans} 使用。
      */
     @Bean
     public DictLoader dictLoader() {

@@ -1,6 +1,6 @@
 package io.github.orangewest.trans.spring.aot;
 
-import io.github.orangewest.trans.annotation.DictTransRepo;
+import io.github.orangewest.trans.annotation.DictTrans;
 import io.github.orangewest.trans.annotation.Trans;
 import io.github.orangewest.trans.annotation.TransRepo;
 import io.github.orangewest.trans.annotation.TransRepos;
@@ -36,7 +36,7 @@ import java.util.stream.Collectors;
  * 为 GraalVM Native Image 自动注册反射元数据。
  *
  * <p>easy-trans 在运行期通过反射读写用户的 DTO 字段（见 {@code ReflectUtils} / {@code TransModel}），
- * 并反射调用 {@code @Trans}/{@code @TransRepo}/{@code @DictTransRepo} 注解的方法（见
+ * 并反射调用 {@code @Trans}/{@code @TransRepo}/{@code @DictTrans} 注解的方法（见
  * {@code TransClassMeta#parseTransRepoMetas}、{@code ReflectUtils#invokeAnnotation}）。Native image 是封闭世界，
  * 必须在构建期用 hint 声明这些反射目标，否则运行时会 {@code NoSuchFieldException} /
  * {@code InaccessibleObjectException} / 注解方法调用失败。
@@ -51,7 +51,7 @@ import java.util.stream.Collectors;
  *
  * <p>说明：Spring Framework 7 移除了 {@code AnnotationMetadata} 的字段级元数据 API，因此这里直接用内嵌 ASM
  * （{@code org.springframework.asm}）读取类文件来判断字段注解，并递归解析元注解（支持
- * {@code @DictTransRepo} 以及用户自定义的「{@code @TransRepo} 元注解」注解）。
+ * {@code @DictTrans} 以及用户自定义的「{@code @TransRepo} 元注解」注解）。
  */
 public class EasyTransRuntimeHints implements RuntimeHintsRegistrar {
 
@@ -59,7 +59,7 @@ public class EasyTransRuntimeHints implements RuntimeHintsRegistrar {
      * 框架自带的翻译注解（已知类，无需扫描即可注册方法调用 hint）。
      */
     private static final List<Class<?>> KNOWN_TRAN_ANNOTATIONS = Arrays.asList(
-        Trans.class, TransRepo.class, DictTransRepo.class, TransRepos.class);
+        Trans.class, TransRepo.class, DictTrans.class, TransRepos.class);
 
     /**
      * 已知翻译注解的 ASM 描述符集合，用于快速判定「字段注解是否直接是翻译注解」。
@@ -78,7 +78,7 @@ public class EasyTransRuntimeHints implements RuntimeHintsRegistrar {
         ClassLoader cl = (classLoader != null) ? classLoader : getClass().getClassLoader();
 
         // 1. 框架自带注解：注册方法调用 hint（@Trans.trans/key/using、@TransRepo.name/using、
-        //    @DictTransRepo.name/group、@TransRepos.value 等，由 getDeclaredAnnotationsByType /
+        //    @DictTrans.name/group、@TransRepos.value 等，由 getDeclaredAnnotationsByType /
         //    ReflectUtils.invokeAnnotation 在运行期反射调用）。
         for (Class<?> anno : KNOWN_TRAN_ANNOTATIONS) {
             hints.reflection().registerType(anno, MemberCategory.INVOKE_DECLARED_METHODS);
