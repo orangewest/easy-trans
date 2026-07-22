@@ -11,6 +11,4 @@ module io.github.orangewest.trans {
     exports io.github.orangewest.trans.service;
     exports io.github.orangewest.trans.metrics;
     exports io.github.orangewest.trans.exception;
-    exports io.github.orangewest.trans.manager;
-
 }

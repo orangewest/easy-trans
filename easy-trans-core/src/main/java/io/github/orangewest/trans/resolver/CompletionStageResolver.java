@@ -16,6 +16,6 @@ public class CompletionStageResolver implements TransValueResolver {
 
     @Override
     public Object handle(Object value, Function<Object, Object> translator) {
-        return ((CompletionStage<Object>) value).thenApply(translator);
+        return ((CompletionStage<?>) value).thenApply(translator);
     }
 }

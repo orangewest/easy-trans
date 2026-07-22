@@ -26,10 +26,10 @@ public class ReactorTransResolver implements TransValueResolver {
     @Override
     public Object handle(Object value, Function<Object, Object> translator) {
         if (value instanceof Mono) {
-            return ((Mono<Object>) value).map(translator);
+            return ((Mono<?>) value).map(translator);
         }
         if (value instanceof Flux) {
-            return ((Flux<Object>) value).map(translator);
+            return ((Flux<?>) value).map(translator);
         }
         return value;
     }

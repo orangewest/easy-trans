@@ -3,7 +3,6 @@ package io.github.orangewest.trans.manager;
 
 import io.github.orangewest.trans.core.TransClassMeta;
 
-import java.io.Serializable;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -22,7 +21,7 @@ public class TransClassMetaCacheManager {
     private static final Map<String, TransClassMeta> CACHE = new ConcurrentHashMap<>();
 
     public static TransClassMeta getTransClassMeta(Class<?> clazz) {
-        return CACHE.computeIfAbsent(clazz.getName(), k -> new TransClassMeta(clazz));
+        return CACHE.computeIfAbsent(clazz.getName(), _ -> new TransClassMeta(clazz));
     }
 
 }

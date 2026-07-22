@@ -13,28 +13,24 @@ import java.util.concurrent.CopyOnWriteArrayList;
  */
 public final class TransValueResolverFactory {
 
-    private static final List<TransValueResolver> ADAPTERS = new CopyOnWriteArrayList<>();
+    private static final List<TransValueResolver> RESOLVERS = new CopyOnWriteArrayList<>();
 
     static {
-        ADAPTERS.add(new CompletionStageResolver());
+        RESOLVERS.add(new CompletionStageResolver());
     }
 
     private TransValueResolverFactory() {
     }
 
-    public static void register(TransValueResolver adapter) {
-        ADAPTERS.add(adapter);
-    }
-
-    public static List<TransValueResolver> getAdapters() {
-        return ADAPTERS;
+    public static void register(TransValueResolver resolver) {
+        RESOLVERS.add(resolver);
     }
 
     public static TransValueResolver firstSupports(Object value) {
         Class<?> type = value.getClass();
-        for (TransValueResolver adapter : ADAPTERS) {
-            if (adapter.supports(type)) {
-                return adapter;
+        for (TransValueResolver resolver : RESOLVERS) {
+            if (resolver.supports(type)) {
+                return resolver;
             }
         }
         return null;

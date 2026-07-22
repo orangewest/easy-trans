@@ -62,8 +62,7 @@ public class TransModel {
                         }
                     });
                 }
-            } else if (objValue instanceof Object[]) {
-                Object[] objArray = (Object[]) objValue;
+            } else if (objValue instanceof Object[] objArray) {
                 if (isFillAll) {
                     for (int i = 0; i < multipleTransVal.size(); i++) {
                         objArray[i] = transValueMap.get(multipleTransVal.get(i));

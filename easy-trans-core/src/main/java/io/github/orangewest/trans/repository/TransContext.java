@@ -1,7 +1,7 @@
 package io.github.orangewest.trans.repository;
 
 /**
- * 传递给 {@link TransRepository#getTransValueMap(List, TransContext)} 的翻译上下文。
+ * 传递给 {@code TransRepository#getTransValueMap(List, TransContext)} 的翻译上下文。
  *
  * <p>框架在<b>解析阶段</b>（每个被翻译类首次遇到时，仅一次）通过反射读取源注解
  * （{@code @TransRepo} / 自定义元注解 / {@code @Trans(using=...)}）的属性，集中放入本上下文。

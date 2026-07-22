@@ -45,10 +45,6 @@ public class ReflectUtils {
         }
     }
 
-    /**
-     * @param clazz class对象
-     * @return 获取一个class的所有的字段
-     */
     private static final System.Logger REFLECT_LOGGER = System.getLogger(ReflectUtils.class.getName());
 
     public static List<Field> getAllField(Class<?> clazz) {
@@ -120,7 +116,7 @@ public class ReflectUtils {
     }
 
     public static <T extends AccessibleObject> void setAccessible(T accessibleObject) throws SecurityException {
-        if (null != accessibleObject && !accessibleObject.isAccessible()) {
+        if (null != accessibleObject) {
             accessibleObject.setAccessible(true);
         }
     }

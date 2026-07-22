@@ -44,7 +44,7 @@ public class TransClassMeta {
 
     private void parseTransField() {
         List<Field> declaredFields = ReflectUtils.getAllField(this.clazz);
-        Map<String, Field> fieldNameMap = declaredFields.stream().collect(Collectors.toMap(Field::getName, x -> x, (o, n) -> o));
+        Map<String, Field> fieldNameMap = declaredFields.stream().collect(Collectors.toMap(Field::getName, x -> x, (o, _) -> o));
         List<TransFieldMeta> transFieldMetas = new ArrayList<>();
         // 循环遍历所有的属性进行判断
         for (Field field : declaredFields) {
@@ -197,7 +197,7 @@ public class TransClassMeta {
         return transFieldMetas.stream()
                 .filter(m -> !nameMap.containsKey(m.getTransRepoMeta().getRepoName()))
                 .peek(m -> {
-                    Set<TransFieldMeta> visited = Collections.newSetFromMap(new IdentityHashMap<TransFieldMeta, Boolean>());
+                    Set<TransFieldMeta> visited = Collections.newSetFromMap(new IdentityHashMap<>());
                     findChildren(Collections.singletonList(m), tempMap, visited);
                 })
                 .collect(toList());

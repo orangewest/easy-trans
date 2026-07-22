@@ -15,10 +15,6 @@ public class DefaultTransContext implements TransContext {
 
     private final Class<?> sourceType;
 
-    public DefaultTransContext(String repoName, Map<String, Object> attributes) {
-        this(repoName, attributes, null);
-    }
-
     public DefaultTransContext(String repoName, Map<String, Object> attributes, Class<?> sourceType) {
         this.repoName = repoName;
         this.attributes = attributes == null ? Collections.emptyMap() : attributes;

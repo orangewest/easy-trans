@@ -75,7 +75,7 @@ public class TransService {
         if (CollectionUtils.isEmpty(objList)) {
             return obj;
         }
-        Class<?> objClass = objList.get(0).getClass();
+        Class<?> objClass = objList.getFirst().getClass();
         if (objClass.getName().startsWith("java.")) {
             return obj;
         }
@@ -118,7 +118,7 @@ public class TransService {
                                     .toArray(CompletableFuture[]::new))
                     .join();
             if (!errors.isEmpty()) {
-                Throwable cause = errors.get(0);
+                Throwable cause = errors.getFirst();
                 throw new TransException("Translation failed: " + cause.getMessage(), cause);
             }
         } else {

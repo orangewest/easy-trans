@@ -4,6 +4,7 @@ import io.github.orangewest.trans.annotation.DictTrans;
 import io.github.orangewest.trans.annotation.Trans;
 import io.github.orangewest.trans.annotation.TransRepo;
 import io.github.orangewest.trans.annotation.TransRepos;
+import org.jspecify.annotations.NonNull;
 import org.springframework.aot.hint.MemberCategory;
 import org.springframework.aot.hint.RuntimeHints;
 import org.springframework.aot.hint.RuntimeHintsRegistrar;
@@ -15,14 +16,9 @@ import org.springframework.asm.Opcodes;
 import org.springframework.beans.factory.annotation.AnnotatedBeanDefinition;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
-import org.springframework.core.type.classreading.MetadataReader;
-import org.springframework.core.type.classreading.MetadataReaderFactory;
-import org.springframework.core.type.filter.TypeFilter;
-import org.springframework.lang.Nullable;
 import org.springframework.util.ClassUtils;
 
 import java.io.InputStream;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -74,7 +70,7 @@ public class EasyTransRuntimeHints implements RuntimeHintsRegistrar {
     }
 
     @Override
-    public void registerHints(RuntimeHints hints, @Nullable ClassLoader classLoader) {
+    public void registerHints(@NonNull RuntimeHints hints, ClassLoader classLoader) {
         ClassLoader cl = (classLoader != null) ? classLoader : getClass().getClassLoader();
 
         // 1. 框架自带注解：注册方法调用 hint（@Trans.trans/key/using、@TransRepo.name/using、
@@ -86,31 +82,7 @@ public class EasyTransRuntimeHints implements RuntimeHintsRegistrar {
 
         // 2. 扫描类路径，定位「字段级标注了翻译注解」的 DTO，并收集自定义元注解。
         Set<String> customAnnoDescriptors = Collections.newSetFromMap(new ConcurrentHashMap<>());
-        Map<String, Boolean> metaCache = new ConcurrentHashMap<>();
-
-        ClassPathScanningCandidateComponentProvider scanner =
-            new ClassPathScanningCandidateComponentProvider(false) {
-                @Override
-                protected boolean isCandidateComponent(AnnotatedBeanDefinition beanDefinition) {
-                    // 默认实现会排除 abstract / interface；这里放开，确保「@Trans 打在抽象父类字段上、
-                    // 由具体子类实例化」的场景也能被扫描到（运行期 ReflectUtils.getAllField 会跨类遍历）。
-                    return true;
-                }
-            };
-        scanner.addIncludeFilter(new TypeFilter() {
-            @Override
-            public boolean match(MetadataReader reader, MetadataReaderFactory factory) {
-                try (InputStream is = reader.getResource().getInputStream()) {
-                    FieldAnnotationDetector detector =
-                        new FieldAnnotationDetector(cl, customAnnoDescriptors, metaCache);
-                    new ClassReader(is).accept(detector,
-                        ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
-                    return detector.found();
-                } catch (Throwable ex) {
-                    return false;
-                }
-            }
-        });
+        ClassPathScanningCandidateComponentProvider scanner = getClassPathScanningCandidateComponentProvider(cl, customAnnoDescriptors);
 
         for (String basePackage : resolveBasePackages()) {
             for (BeanDefinition definition : scanner.findCandidateComponents(basePackage)) {
@@ -139,6 +111,32 @@ public class EasyTransRuntimeHints implements RuntimeHintsRegistrar {
                 // 理论不会失败，忽略。
             }
         }
+    }
+
+    private static @NonNull ClassPathScanningCandidateComponentProvider getClassPathScanningCandidateComponentProvider(ClassLoader cl, Set<String> customAnnoDescriptors) {
+        Map<String, Boolean> metaCache = new ConcurrentHashMap<>();
+
+        ClassPathScanningCandidateComponentProvider scanner =
+            new ClassPathScanningCandidateComponentProvider(false) {
+                @Override
+                protected boolean isCandidateComponent(@NonNull AnnotatedBeanDefinition beanDefinition) {
+                    // 默认实现会排除 abstract / interface；这里放开，确保「@Trans 打在抽象父类字段上、
+                    // 由具体子类实例化」的场景也能被扫描到（运行期 ReflectUtils.getAllField 会跨类遍历）。
+                    return true;
+                }
+            };
+        scanner.addIncludeFilter((reader, _) -> {
+            try (InputStream is = reader.getResource().getInputStream()) {
+                FieldAnnotationDetector detector =
+                    new FieldAnnotationDetector(cl, customAnnoDescriptors, metaCache);
+                new ClassReader(is).accept(detector,
+                    ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+                return detector.found();
+            } catch (Throwable ex) {
+                return false;
+            }
+        });
+        return scanner;
     }
 
     /**
@@ -193,12 +191,10 @@ public class EasyTransRuntimeHints implements RuntimeHintsRegistrar {
         }
 
         @Override
-        @Nullable
         public FieldVisitor visitField(int access, String name, String descriptor,
-                                       @Nullable String signature, @Nullable Object value) {
+                                        String signature,  Object value) {
             return new FieldVisitor(Opcodes.ASM9) {
                 @Override
-                @Nullable
                 public AnnotationVisitor visitAnnotation(String desc, boolean visible) {
                     if (KNOWN_TRAN_ANNO_DESCRIPTORS.contains(desc)) {
                         found = true;
@@ -233,7 +229,6 @@ public class EasyTransRuntimeHints implements RuntimeHintsRegistrar {
                 if (is != null) {
                     new ClassReader(is).accept(new ClassVisitor(Opcodes.ASM9) {
                         @Override
-                        @Nullable
                         public AnnotationVisitor visitAnnotation(String desc, boolean visible) {
                             if (isTransMetaAnnotation(desc, visited)) {
                                 result[0] = true;
