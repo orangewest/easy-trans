@@ -6,6 +6,7 @@ import java.lang.reflect.AccessibleObject;
 import java.lang.reflect.Method;
 import java.lang.reflect.Field;
 import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Optional;
@@ -48,14 +49,16 @@ public class ReflectUtils {
      * @param clazz class对象
      * @return 获取一个class的所有的字段
      */
+    private static final System.Logger REFLECT_LOGGER = System.getLogger(ReflectUtils.class.getName());
+
     public static List<Field> getAllField(Class<?> clazz) {
-        Field[] fields;
         List<Field> result = new ArrayList<>();
-        for (; clazz != Object.class; clazz = clazz.getSuperclass()) {
+        for (; clazz != null && clazz != Object.class; clazz = clazz.getSuperclass()) {
             try {
-                fields = clazz.getDeclaredFields();
-                result.addAll(Arrays.asList(fields));
-            } catch (Exception ignored) {
+                result.addAll(Arrays.asList(clazz.getDeclaredFields()));
+            } catch (Throwable t) {
+                // 某父类 getDeclaredFields 抛错时记录而非静默忽略，避免漏字段难以排查
+                REFLECT_LOGGER.log(System.Logger.Level.WARNING, "getAllField: getDeclaredFields failed for " + clazz, t);
             }
         }
         return result;
@@ -72,7 +75,7 @@ public class ReflectUtils {
     /**
      * 在解析阶段（每个被翻译类仅一次）从源注解反射提取属性，放入 Map。
      *
-     * <p>只读取注解<b>自身声明的属性</b>（如自定义元注解 {@code @DictTransRepo} 的 {@code group()}），
+     * <p>只读取注解<b>自身声明的属性</b>（如自定义元注解 {@code @DictTrans} 的 {@code group()}），
      * <b>不</b>递归其元注解（如 {@code @TransRepo} 的 {@code name()}/{@code using()}）。
      * 元注解属性由 {@link io.github.orangewest.trans.core.TransRepoMeta} 单独处理（决定仓库名、仓库类型），
      * 若混入本 Map，既无意义，又可能因同名覆盖掉自定义注解自身的属性值。
@@ -197,7 +200,12 @@ public class ReflectUtils {
         if (field.getType().isArray()) {
             return field.getType().getComponentType();
         }
-        return (Class<?>) ((ParameterizedType) field.getGenericType()).getActualTypeArguments()[0];
+        Type genericType = field.getGenericType();
+        if (genericType instanceof ParameterizedType pt && pt.getActualTypeArguments().length > 0) {
+            return (Class<?>) pt.getActualTypeArguments()[0];
+        }
+        // 裸类型 / 类型变量 / 无类型参数：无法确定集合元素类型，回退为 Object（避免 ClassCastException / NPE）
+        return Object.class;
     }
 
     public static Class<?> getWrapperClass(Class<?> clazz) {
