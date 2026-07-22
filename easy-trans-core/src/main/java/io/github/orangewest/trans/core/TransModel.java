@@ -36,7 +36,7 @@ public class TransModel {
         this.transFieldMeta = transFieldMeta;
         this.obj = obj;
         Field transField = transFieldMeta.getTransRepoMeta().getRepoField();
-        this.isMultiple = transFieldMeta.getTransRepoMeta().isMultiple();
+        this.isMultiple = transFieldMeta.isMultiple();
         this.transVal = transField == null ? obj : ReflectUtils.getFieldValue(obj, transField);
     }
 

@@ -32,11 +32,19 @@ public class TransFieldMeta {
      */
     private List<TransFieldMeta> children;
 
+    /**
+     * 多值判定：以*目标字段*（field）自身的集合 / 数组性为准（R5）。
+     * README 承诺「源或目标为集合/数组」均支持，故不依赖源仓库字段的多值性，
+     * 避免「源单值 → 目标集合」被误判为单值而漏填。
+     */
+    private final boolean isMultiple;
+
     public TransFieldMeta(Field field, String key, TransRepoMeta transRepoMeta) {
         this.field = field;
         this.key = key;
         this.transRepoMeta = transRepoMeta;
-        this.fieldType = transRepoMeta.isMultiple() ?
+        this.isMultiple = (Iterable.class).isAssignableFrom(field.getType()) || field.getType().isArray();
+        this.fieldType = isMultiple ?
                 ReflectUtils.getFieldParameterizedType(field) : ReflectUtils.getWrapperClass(field.getType());
         // 解析期一次性 setAccessible（ADR-0003）：运行期 getFieldValue/setFieldValue 不再重复检查
         ReflectUtils.setAccessible(field);
@@ -64,6 +72,10 @@ public class TransFieldMeta {
 
     public Class<?> getFieldType() {
         return fieldType;
+    }
+
+    public boolean isMultiple() {
+        return isMultiple;
     }
 
 

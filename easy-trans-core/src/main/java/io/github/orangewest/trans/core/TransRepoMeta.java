@@ -2,6 +2,7 @@ package io.github.orangewest.trans.core;
 
 import io.github.orangewest.trans.repository.TransRepository;
 import io.github.orangewest.trans.util.ReflectUtils;
+import io.github.orangewest.trans.util.StringUtils;
 
 import java.lang.reflect.Field;
 import java.util.Map;
@@ -19,11 +20,6 @@ public class TransRepoMeta {
     private final Field repoField;
 
     /**
-     * 是否是多值
-     */
-    private final boolean isMultiple;
-
-    /**
      * 源注解（{@code @TransRepo} / 自定义元注解 / {@code @Trans(using=...)}) 的属性，
      * 由框架在解析阶段通过反射提取并缓存，运行时零反射。
      */
@@ -36,12 +32,13 @@ public class TransRepoMeta {
 
 
     public TransRepoMeta(String repoName, Field repoField, Map<String, Object> attributes, Class<? extends TransRepository<?, ?>> repository) {
-        this.repoName = repoField != null ? repoField.getName() : repoName;
+        // 与 TransClassMeta.generateRepoName 保持一致：显式 name 优先，否则回退到源字段名（map key 也用此值，
+        // 保证 buildTransTree 的树根检测、指标 repoName、TransContext 三者口径统一）。
+        this.repoName = StringUtils.isNotEmpty(repoName) ? repoName
+                : (repoField != null ? repoField.getName() : repoName);
         this.repoField = repoField;
         this.attributes = attributes;
         this.repository = repository;
-        this.isMultiple = repoField != null &&
-                ((Iterable.class).isAssignableFrom(repoField.getType()) || repoField.getType().isArray());
         // 解析期一次性 setAccessible（ADR-0003）：运行期读取 repoField 不再重复检查
         ReflectUtils.setAccessible(repoField);
     }
@@ -60,10 +57,6 @@ public class TransRepoMeta {
 
     public Class<? extends TransRepository<?, ?>> getRepository() {
         return repository;
-    }
-
-    public boolean isMultiple() {
-        return isMultiple;
     }
 
 }

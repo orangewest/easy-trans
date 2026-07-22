@@ -82,6 +82,7 @@ public class TransClassMeta {
                 transFieldMetas.add(new TransFieldMeta(field, key, transRepoMetaMap.get(trans)));
             }
         }
+        validateMultiplicity(transFieldMetas);
         this.transFieldMetaList = buildTransTree(transFieldMetas);
     }
 
@@ -142,6 +143,27 @@ public class TransClassMeta {
             Map<String, Object> attributes) {
     }
 
+    /**
+     * Multiplicity consistency check (R5): when the source field is a collection/array but the
+     * target field is single-valued, the fill semantics are ambiguous (no natural "take first element"
+     * convention, and it conflicts with user expectations). Fail fast at parse time instead of silently
+     * filling wrong values / swallowing a ClassCastException in the write path at runtime.
+     * Target field being a collection/array (or source and target both single-valued) is valid.
+     */
+    private void validateMultiplicity(List<TransFieldMeta> transFieldMetas) {
+        for (TransFieldMeta meta : transFieldMetas) {
+            Field src = meta.getTransRepoMeta().getRepoField();
+            boolean srcMultiple = src != null
+                    && ((Iterable.class).isAssignableFrom(src.getType()) || src.getType().isArray());
+            if (srcMultiple && !meta.isMultiple()) {
+                throw new TransException("Field '" + meta.getField().getName() + "' declares a translation whose "
+                        + "source field '" + src.getName() + "' is a collection/array "
+                        + "but the target field is single-valued. easy-trans supports source-OR-target multiplicity, "
+                        + "but source-collection -> single-target is ambiguous; make the target field a collection/array, "
+                        + "or resolve multiple values inside your TransRepository.");
+            }
+        }
+    }
     private void parseTransRepo() {
         Map<String, TransRepoMeta> transRepoMetaMap = parseTransRepoMetas(this.clazz);
         List<Field> declaredFields = ReflectUtils.getAllField(this.clazz);

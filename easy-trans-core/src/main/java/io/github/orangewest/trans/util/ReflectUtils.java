@@ -13,8 +13,6 @@ import java.util.Optional;
 
 public class ReflectUtils {
 
-    public static final Map<Class<?>, Class<?>> WRAPPER_PRIMITIVE_MAP = new ConcurrentHashMap<>(8);
-
     public static final Map<Class<?>, Class<?>> PRIMITIVE_WRAPPER_MAP = new ConcurrentHashMap<>(8);
 
     /**
@@ -32,17 +30,14 @@ public class ReflectUtils {
     private static final Map<KeyField, Optional<Field>> KEY_FIELD_CACHE = new ConcurrentHashMap<>();
 
     static {
-        WRAPPER_PRIMITIVE_MAP.put(Boolean.class, boolean.class);
-        WRAPPER_PRIMITIVE_MAP.put(Byte.class, byte.class);
-        WRAPPER_PRIMITIVE_MAP.put(Character.class, char.class);
-        WRAPPER_PRIMITIVE_MAP.put(Double.class, double.class);
-        WRAPPER_PRIMITIVE_MAP.put(Float.class, float.class);
-        WRAPPER_PRIMITIVE_MAP.put(Integer.class, int.class);
-        WRAPPER_PRIMITIVE_MAP.put(Long.class, long.class);
-        WRAPPER_PRIMITIVE_MAP.put(Short.class, short.class);
-        for (Map.Entry<Class<?>, Class<?>> entry : WRAPPER_PRIMITIVE_MAP.entrySet()) {
-            PRIMITIVE_WRAPPER_MAP.put(entry.getValue(), entry.getKey());
-        }
+        PRIMITIVE_WRAPPER_MAP.put(boolean.class, Boolean.class);
+        PRIMITIVE_WRAPPER_MAP.put(byte.class, Byte.class);
+        PRIMITIVE_WRAPPER_MAP.put(char.class, Character.class);
+        PRIMITIVE_WRAPPER_MAP.put(double.class, Double.class);
+        PRIMITIVE_WRAPPER_MAP.put(float.class, Float.class);
+        PRIMITIVE_WRAPPER_MAP.put(int.class, Integer.class);
+        PRIMITIVE_WRAPPER_MAP.put(long.class, Long.class);
+        PRIMITIVE_WRAPPER_MAP.put(short.class, Short.class);
     }
 
     private static final System.Logger REFLECT_LOGGER = System.getLogger(ReflectUtils.class.getName());
@@ -111,6 +106,7 @@ public class ReflectUtils {
         try {
             return field.get(obj);
         } catch (IllegalAccessException e) {
+            REFLECT_LOGGER.log(System.Logger.Level.WARNING, "getFieldValue failed for " + field, e);
             return null;
         }
     }
@@ -128,7 +124,9 @@ public class ReflectUtils {
     public static void setFieldValue(Object obj, Field field, Object fieldValue) {
         try {
             field.set(obj, fieldValue);
-        } catch (IllegalAccessException ignored) {
+        } catch (IllegalAccessException e) {
+            REFLECT_LOGGER.log(System.Logger.Level.WARNING,
+                    "setFieldValue failed for " + field + " on " + (obj == null ? "null" : obj.getClass()), e);
         }
     }
 
@@ -183,13 +181,6 @@ public class ReflectUtils {
             }
         }
         return null;
-    }
-
-    public static boolean isPrimitiveWrapper(Class<?> clazz) {
-        if (null == clazz) {
-            return false;
-        }
-        return WRAPPER_PRIMITIVE_MAP.containsKey(clazz);
     }
 
     public static Class<?> getFieldParameterizedType(Field field) {
