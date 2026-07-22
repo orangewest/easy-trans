@@ -1,6 +1,6 @@
 package io.github.orangewest.trans.dto;
 
-import io.github.orangewest.trans.annotation.DictTransRepo;
+import io.github.orangewest.trans.annotation.DictTrans;
 import io.github.orangewest.trans.annotation.Trans;
 import io.github.orangewest.trans.annotation.TransRepo;
 import io.github.orangewest.trans.repository.DeptTransRepository;
@@ -13,16 +13,14 @@ public class UserDto {
 
     private String name;
 
-    @DictTransRepo(group = "sexDict")
     private String sex;
 
-    @Trans(trans = "sex")
+    @DictTrans(group = "sexDict", trans = "sex")
     private String sexName;
 
-    @DictTransRepo(group = "jobDict")
     private String job;
 
-    @Trans(trans = "job")
+    @DictTrans(group = "jobDict", trans = "job")
     private String jobName;
 
     @TransRepo(using = TeacherTransRepository.class)

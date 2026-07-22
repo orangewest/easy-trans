@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>io.github.orangewest</groupId>
+        <artifactId>easy-trans</artifactId>
+        <version>2.0.0</version>
+    </parent>
+
+    <artifactId>easy-trans-demo</artifactId>
+    <packaging>pom</packaging>
+    <name>easy-trans-demo</name>
+    <description>easy-trans 各场景集成测试示例聚合模块</description>
+
+    <!-- 聚合模块本身不发布，跳过 source/javadoc/gpg -->
+    <properties>
+        <maven.javadoc.skip>true</maven.javadoc.skip>
+        <maven.source.skip>true</maven.source.skip>
+        <maven.gpg.skip>true</maven.gpg.skip>
+    </properties>
+
+    <modules>
+        <module>easy-trans-demo-aot</module>
+        <module>easy-trans-demo-webflux</module>
+        <module>easy-trans-demo-actuator</module>
+        <module>easy-trans-demo-mybatis</module>
+        <module>easy-trans-demo-jpa</module>
+    </modules>
+</project>

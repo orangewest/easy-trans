@@ -44,7 +44,7 @@ public class TransClassMeta {
 
     private void parseTransField() {
         List<Field> declaredFields = ReflectUtils.getAllField(this.clazz);
-        Map<String, Field> fieldNameMap = declaredFields.stream().collect(Collectors.toMap(Field::getName, x -> x, (o, n) -> o));
+        Map<String, Field> fieldNameMap = declaredFields.stream().collect(Collectors.toMap(Field::getName, x -> x, (o, _) -> o));
         List<TransFieldMeta> transFieldMetas = new ArrayList<>();
         // 循环遍历所有的属性进行判断
         for (Field field : declaredFields) {
@@ -99,8 +99,7 @@ public class TransClassMeta {
      * @return 解析出的翻译信息；非 {@code @Trans} 相关则返回 {@code null}
      */
     private static TransLike resolveTransLike(Annotation annotation) {
-        if (annotation instanceof Trans) {
-            Trans trans = (Trans) annotation;
+        if (annotation instanceof Trans trans) {
             // 直接 @Trans：其 trans/key/using 已由 TransRepoMeta 直接得出，无需（也不应）经 TransContext 暴露，
             // 与「自定义元注解才把自有属性抽进 TransContext」的约定保持一致（见 #03 invariant）。
             return new TransLike(trans.trans(), trans.key(), trans.using(), Collections.emptyMap());
@@ -109,8 +108,26 @@ public class TransClassMeta {
         Trans[] metaTrans = annotation.annotationType().getDeclaredAnnotationsByType(Trans.class);
         if (metaTrans.length > 0) {
             Trans meta = metaTrans[0];
-            return new TransLike(meta.trans(), meta.key(), meta.using(),
-                    ReflectUtils.extractAnnotationAttributes(annotation));
+            Map<String, Object> attributes = ReflectUtils.extractAnnotationAttributes(annotation);
+            // 自定义元注解若未在元 @Trans 上写死 trans/key（例如 @DbTrans 把 trans()/key() 作为自身成员、
+            // 由调用处按字段差异化传入），则回退到注解自身声明的 trans()/key() 成员，
+            // 使自定义 @Trans 元注解也能参数化 trans/key（同时保持向后兼容：
+            // MyTrans 这类无自有成员、完全依赖元 @Trans 常量的注解行为不变）。
+            String trans = meta.trans();
+            if (trans == null || trans.isEmpty()) {
+                Object t = attributes.get("trans");
+                if (t instanceof String s && !s.isEmpty()) {
+                    trans = s;
+                }
+            }
+            String key = meta.key();
+            if (key == null || key.isEmpty()) {
+                Object k = attributes.get("key");
+                if (k instanceof String s && !s.isEmpty()) {
+                    key = s;
+                }
+            }
+            return new TransLike(trans, key, meta.using(), attributes);
         }
         return null;
     }
@@ -118,34 +135,11 @@ public class TransClassMeta {
     /**
      * 一个字段注解解析出的翻译信息（{@code trans/key/using} + 解析期抽取的自定义属性）。
      */
-    private static final class TransLike {
-        private final String trans;
-        private final String key;
-        private final Class<? extends TransRepository<?, ?>> using;
-        private final Map<String, Object> attributes;
-
-        TransLike(String trans, String key, Class<? extends TransRepository<?, ?>> using, Map<String, Object> attributes) {
-            this.trans = trans;
-            this.key = key;
-            this.using = using;
-            this.attributes = attributes;
-        }
-
-        String trans() {
-            return trans;
-        }
-
-        String key() {
-            return key;
-        }
-
-        Class<? extends TransRepository<?, ?>> using() {
-            return using;
-        }
-
-        Map<String, Object> attributes() {
-            return attributes;
-        }
+    private record TransLike(
+            String trans,
+            String key,
+            Class<? extends TransRepository<?, ?>> using,
+            Map<String, Object> attributes) {
     }
 
     private void parseTransRepo() {
@@ -203,7 +197,7 @@ public class TransClassMeta {
         return transFieldMetas.stream()
                 .filter(m -> !nameMap.containsKey(m.getTransRepoMeta().getRepoName()))
                 .peek(m -> {
-                    Set<TransFieldMeta> visited = Collections.newSetFromMap(new IdentityHashMap<TransFieldMeta, Boolean>());
+                    Set<TransFieldMeta> visited = Collections.newSetFromMap(new IdentityHashMap<>());
                     findChildren(Collections.singletonList(m), tempMap, visited);
                 })
                 .collect(toList());

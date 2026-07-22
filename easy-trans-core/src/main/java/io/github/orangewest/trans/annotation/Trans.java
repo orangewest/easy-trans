@@ -15,9 +15,10 @@ import java.lang.annotation.Target;
 public @interface Trans {
 
     /**
-     * @return 需要获取数据的仓库（或字段）
+     * @return 需要获取数据的仓库（或字段）。作为元注解使用时（如自定义 @DbTrans）可留空，
+     * 由框架回退读取自定义注解自身声明的 {@code trans()} 成员。
      */
-    String trans();
+    String trans() default "";
 
     /**
      * @return 从仓库中提取的字段

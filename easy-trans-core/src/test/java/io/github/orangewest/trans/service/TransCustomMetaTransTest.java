@@ -59,9 +59,8 @@ class TransCustomMetaTransTest {
     void customMetaTrans_isRecognizedAndTranslated() {
         TransService service = new TransService();
         CustomMetaDto dto = new CustomMetaDto(2L);
-        boolean result = service.trans(dto);
+        service.trans(dto);
 
-        assertEquals(true, result);
         assertNotNull(dto.getTeacherName());
         assertEquals("老师2", dto.getTeacherName());
     }

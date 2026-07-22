@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>io.github.orangewest</groupId>
+        <artifactId>easy-trans-demo</artifactId>
+        <version>2.0.0</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>easy-trans-demo-mybatis</artifactId>
+    <name>easy-trans-demo-mybatis</name>
+    <description>easy-trans 与 MyBatis 集成测试示例</description>
+
+    <properties>
+        <maven.javadoc.skip>true</maven.javadoc.skip>
+        <maven.source.skip>true</maven.source.skip>
+        <maven.gpg.skip>true</maven.gpg.skip>
+        <mybatis-plus.version>3.5.17</mybatis-plus.version>
+        <mybatis-spring.version>3.0.4</mybatis-spring.version>
+        <h2.version>2.4.240</h2.version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+        </dependency>
+        <!-- MyBatis-Plus：BaseMapper 自带 selectBatchIds 等通用方法，无需手写 SqlProvider。
+             注：本 nexus 仅提供旧 artifactId mybatis-plus-boot-starter（无 mybatis-plus-spring-boot-starter），
+             其面向 Spring Boot 2/3，能否在 Spring Boot 4 下运行需实测。 -->
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-boot-starter</artifactId>
+            <version>${mybatis-plus.version}</version>
+        </dependency>
+        <!-- Spring Boot 4 / Spring 7 需要 mybatis-spring 3.0.4+，
+             否则 MapperFactoryBean 会以 String 写入 factoryBeanObjectType 属性导致启动失败 -->
+        <dependency>
+            <groupId>org.mybatis</groupId>
+            <artifactId>mybatis-spring</artifactId>
+            <version>${mybatis-spring.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <version>${h2.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.orangewest</groupId>
+            <artifactId>easy-trans-spring-start</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>

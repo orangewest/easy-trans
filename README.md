@@ -1,200 +1,120 @@
 # easy-trans
 
-一款通用的数据翻译框架
-
-<!-- PROJECT SHIELDS -->
-
-[![Contributors][contributors-shield]][contributors-url]
-[![Forks][forks-shield]][forks-url]
-[![Stargazers][stars-shield]][stars-url]
-[![Issues][issues-shield]][issues-url]
-[![MIT License][license-shield]][license-url]
-
-<!-- PROJECT LOGO -->
-
-<br />
-
 <p align="center">
   <a href="https://github.com/orangewest/easy-trans">
-    <img src="logo.png" alt="Logo" width="300" height="70">
+    <img src="logo.png" alt="easy-trans" width="280">
   </a>
-
-<h3 align="center">easy-trans</h3>
-  <p align="center">
-    一款通用的数据翻译框架
-    <br />
-    <a href="https://github.com/orangewest/easy-trans"><strong>探索本项目的文档 »</strong></a>
-    <br />
-    <br />
-    <a href="https://github.com/orangewest/easy-trans/blob/main/easy-trans-core/src/test/java/io/github/orangewest/trans/service/TransServiceTest.java">查看Demo</a>
-    ·
-    <a href="https://github.com/orangewest/easy-trans/issues">报告Bug</a>
-    ·
-    <a href="https://github.com/orangewest/easy-trans/issues">提出新特性</a>
-  </p>
-
 </p>
 
-> easy-trans 是一个**轻量、零依赖**的通用数据翻译框架：通过注解声明「翻译哪个字段、从哪个数据源取数」，框架负责并行取数并回填。核心层 `easy-trans-core` 不依赖任何第三方库，缓存、数据源等均由使用者自定义的 `TransRepository` 实现——框架只做编排。
+<p align="center">
+  基于注解的 Java 数据翻译框架 —— 用一行注解把编码值（<code>sex=1</code>、<code>teacherId=2</code>）自动回填成展示值（<code>sexName="男"</code>），告别重复的查表赋值。
+</p>
 
-### 特性
+<p align="center">
+  <a href="https://github.com/orangewest/easy-trans/releases"><img src="https://img.shields.io/github/v/release/orangewest/easy-trans" alt="Release"></a>
+  <a href="https://github.com/orangewest/easy-trans/blob/main/LICENSE"><img src="https://img.shields.io/github/license/orangewest/easy-trans" alt="License"></a>
+  <img src="https://img.shields.io/badge/JDK-25-blue" alt="JDK">
+  <img src="https://img.shields.io/badge/Spring%20Boot-4.x-6db33f" alt="Spring Boot">
+  <img src="https://img.shields.io/badge/runtime--deps-none-0a0a0a" alt="Zero runtime dependencies">
+</p>
 
-- **注解驱动**：在字段上声明 `@Trans` 即可完成翻译，零侵入业务代码
-- **多源取数**：数据库、字典、HTTP、缓存……任意数据源，只需实现 `TransRepository` 接口
-- **并行翻译**：不同仓库的字段并行取数，提升批量翻译性能
-- **嵌套翻译**：支持省→市→区等多层级联翻译
-- **包装对象翻译**：`Result`、`Page` 等包装类型通过 `TransObjResolver` 自动拆包
-- **异步 / 响应式支持**：Spring 集成下 `TransUtil.transResult` 可处理 `CompletableFuture`、`Mono`、`Flux` 等返回值
-- **异常安全**：未初始化、仓库未注册、引用悬空等场景抛出 `TransException`，不再静默失败
-- **可观测性**：内置监控指标接口（翻译耗时 / 仓库耗时），Spring 下自动桥接 Micrometer
-- **有界缓存**：类元数据缓存使用 LRU（上限 1024），避免内存无限增长
-- **零运行时依赖**：`easy-trans-core` 仅依赖 JDK，可嵌入任意项目
+## 目录
 
-### 目录
-
+- [简介](#简介)
+- [特性](#特性)
 - [环境要求](#环境要求)
-- [一、架构设计](#一架构设计)
-- [二、优点](#二优点)
-- [三、基本使用](#三基本使用)
-- [四、高级功能](#四高级功能)
-  - [1、自定义注解](#1自定义注解)
-  - [2、嵌套翻译](#2嵌套翻译)
-  - [3、包装类翻译](#3包装类翻译)
-  - [4、对象直接填充](#4对象直接填充)
-  - [5、异常处理](#5异常处理)
-- [五、与 Spring Boot 集成](#五与-spring-boot-集成)
-  - [Micrometer 监控](#可选micrometer-监控)
-- [六、与 MyBatis / JPA 集成](#六与-mybatis--jpa-集成)
+- [快速开始](#快速开始)
+- [核心设计](#核心设计)
+- [注解与接口](#注解与接口)
+- [使用详解](#使用详解)
+  - [字典翻译 @DictTrans](#字典翻译-dicttrans)
+  - [枚举翻译 @EnumTrans](#枚举翻译-enumtrans)
+  - [集合与数组翻译](#集合与数组翻译)
+  - [嵌套翻译](#嵌套翻译)
+  - [包装对象与异步/响应式](#包装对象与异步响应式)
+  - [对象直接填充](#对象直接填充)
+  - [自定义元注解](#自定义元注解)
+  - [异常处理](#异常处理)
+- [与 Spring Boot 集成](#与-spring-boot-集成)
+- [可观测性（Micrometer）](#可观测性micrometer)
+- [与 MyBatis / JPA 集成](#与-mybatis-jpa-集成)
+- [GraalVM Native Image](#graalvm-native-image)
+- [模块说明](#模块说明)
+- [示例运行](#示例运行)
+- [参与贡献](#参与贡献)
+- [许可证](#许可证)
+
+## 简介
+
+一句话看懂它做什么 —— 声明式地把编码「翻译」成展示值：
+
+```java
+class UserDto {
+    @TransRepo(using = TeacherTransRepository.class)
+    Long teacherId = 2L;                          // 翻译前：只有编码
+    @Trans(trans = "teacherId", key = "name")
+    String teacherName;                            // 翻译前：null
+
+    @DictTrans(group = "sex", trans = "sex")
+    String sex = "1";
+    String sexName;                                // 翻译前：null
+}
+
+new TransService().trans(user);
+// 翻译后： teacherName = "老师2"， sexName = "男"
+```
+
+在典型的接口开发中，数据库只存储编码值：`sex=1`、`teacher_id=2`。把这些编码转换成前端可直接展示的 `sexName="男"`、`teacherName="老师2"`，往往充斥着大量重复的查表、赋值逻辑。
+
+easy-trans 用注解把「翻译关系」声明在 DTO 上：框架在运行时读取这些声明，按数据源批量取数并回填到目标字段。核心模块 `easy-trans-core` 仅依赖 JDK，不含任何第三方运行时依赖，可独立使用，也可通过 `easy-trans-spring-start` 接入 Spring Boot。
+
+- 原始值字段（`teacherId`）用 `@TransRepo` 声明数据源；
+- 展示字段（`teacherName`）用 `@Trans` 声明「从哪个原始值取、取哪个属性」；
+- 调用 `TransService.trans(obj)`，框架完成剩余工作。
+
+## 特性
+
+- **注解驱动**：翻译关系写在字段上，业务代码零侵入。
+- **数据源可插拔**：数据库、字典、HTTP、缓存均可接入，只需实现 `TransRepository` 一个接口。
+- **并行取数**：同一对象内不同数据源的字段通过虚拟线程并行查询（`CompletableFuture`），批量翻译时吞吐更高。
+- **多级嵌套**：按字段引用关系自动构建翻译树，支持 省 -> 市 -> 县 这类级联翻译。
+- **集合 / 数组翻译**：源或目标为 `List` / `Set` / 数组时，框架按元素批量翻译。
+- **包装对象拆包**：`Result<T>`、`PageData<T>` 等通过 `TransValueResolver` 自动拆到内部业务对象。
+- **对象填充**：当目标字段类型与仓库返回类型一致时直接填入整个对象，否则按 `key` 提取属性。
+- **异步 / 响应式**：Spring 集成下 `TransUtil.trans` 会等待 `CompletableFuture` / `Mono` / `Flux` 就绪后再翻译。
+- **可观测**：内置指标埋点，classpath 存在 Micrometer 时自动桥接 Observation，无依赖则零开销。
+- **零运行时依赖**：`easy-trans-core` 仅依赖 JDK，可嵌入任意项目。
 
 ## 环境要求
 
-easy-trans 分为两条版本线，按需选择：
+easy-trans 有两条并行的版本线：
 
 | 版本线 | JDK | Spring Boot | 适用场景 |
 | --- | --- | --- | --- |
-| **2.x**（当前主线，2.0.0+） | **JDK 25**（运行需 JRE 25+，构建需 JDK 25） | **Spring Boot 4.x**（已验证 4.1.0） | 新项目 / 可升级 JDK 与 Spring 的用户 |
-| **1.x**（旧线维护） | **JDK 8+** | **Spring Boot 2.7.x** | 仍停留在 JDK 8 或 Spring Boot 2.7 的用户 |
+| **2.x**（主线，当前 2.0.0） | JDK 25（构建需 JDK 25，运行需 JRE 25+） | Spring Boot 4.x（已验证 4.1.0） | 可升级 JDK 与 Spring 的新项目 |
+| **1.x**（维护线） | JDK 8+ | Spring Boot 2.7.x | 仍停留在 JDK 8 / Spring Boot 2.7 的项目 |
 
-- 当前主线 **2.x** 要求 **JDK 25 + Spring Boot 4**；若你的项目还停留在 **JDK 8**（或 Spring Boot 2.7），请使用 **1.x** 版本（`easy-trans-core` / `easy-trans-spring-start` 的 `1.x.y`）。
-- `easy-trans-core` 始终保持零第三方依赖，可脱离 Spring 独立使用（仅需 JDK）。
-- **GraalVM Native Image**：需 Spring Boot 4 的 AOT + RuntimeHints（已在 `easy-trans-spring-start` 内置 `EasyTransRuntimeHints`），构建时使用 **JDK 25 + GraalVM for JDK 25**。
+- 主线 2.x 要求 **JDK 25 + Spring Boot 4**；若项目停留在 JDK 8 或 Spring Boot 2.7，请使用 1.x。
+- `easy-trans-core` 始终保持零第三方依赖，可脱离 Spring 独立使用。
+- **GraalVM Native Image**：需 Spring Boot 4 的 AOT + RuntimeHints，已在 `easy-trans-spring-start` 通过 `EasyTransRuntimeHints` 内置支持；构建使用 JDK 25 + GraalVM for JDK 25。
 
-## 一、架构设计
+## 快速开始
 
-框架的核心思路只有一句话：**在字段上声明「翻译哪个字段、从哪个数据源取数」，框架负责并行取数并回填**。整个翻译过程分为四步：
+### 1. 引入依赖
 
-```
-对象 obj
-   │  trans(obj)
-   ▼
-[1] 拆包 resolveObj      ← TransObjResolver 把 Result / Page 等包装对象拆到内部业务对象
-   ▼
-[2] 解析元数据           ← 构建 TransClassMeta，按字段引用关系生成「key → 子字段」翻译树
-   ▼
-[3] 分组并行取数 doTrans ← 按 @TransRepo 分组，各组用 CompletableFuture 并行调用
-   │                       对应 TransRepository.getTransValueMap()
-   ▼
-[4] 回填字段             ← 按 @Trans 把取到的值写回目标字段（支持对象 / 集合 / 嵌套）
-```
-
-四个核心角色相互配合，各司其职：
-
-| 角色 | 说明 |
-| --- | --- |
-| `@Trans` | 标注在**目标字段**上，声明「从哪取数、取出来提取哪个字段」 |
-| `@TransRepo` | 标注在**源字段**上，把源字段绑定到某个 `TransRepository`（可重复、可在自定义注解上作为元注解） |
-| `TransRepository` | 唯一需要你自己实现的接口：`getTransValueMap()` 负责从任意数据源批量取数 |
-| `TransObjResolver` | 负责把 `Result`、`Page` 等包装对象拆包，让翻译触达内部业务对象 |
-
-下面看看这几个核心组件的源码：</br>翻译核心注解
-
-```java
-
-@Retention(RetentionPolicy.RUNTIME)
-@Target({ElementType.FIELD})
-public @interface Trans {
-
-    /**
-     * @return 需要获取数据的仓库（或字段）
-     */
-    String trans();
-
-    /**
-     * @return 从仓库中提取的字段
-     */
-    String key() default "";
-
-    /**
-     * @return 翻译数据获取仓库；未指定时通过 trans() 名称匹配 @TransRepo
-     */
-    Class<? extends TransRepository<?, ?>> using() default None.class;
-
-    /**
-     * 哨兵类型，用于在未显式指定 using() 时占位
-     */
-    interface None extends TransRepository<Object, Object> {
-    }
-
-}
-
-```
-
-</br>翻译仓库
-
-```java
-public interface TransRepository<T, R> {
-
-    /**
-     * 获取翻译结果（适用于数据库等翻译）
-     *
-     * @param transValues 需要翻译的值
-     * @param context     翻译上下文，携带仓库名与源注解属性（框架在解析阶段已通过反射提取，运行时零反射）
-     * @return 查询结果值 val-翻译值
-     */
-    Map<T, R> getTransValueMap(List<T> transValues, TransContext context);
-
-}
-```
-
-`getTransValueMap` 的第二个参数 `TransContext` 是框架在**解析阶段**（每个被翻译类首次遇到时，仅一次）通过反射读取源注解（`@TransRepo` / 自定义元注解 / `@Trans(using=...)`）属性后注入的上下文。仓库实现通过 `context.get("属性名", 类型.class)` 取用，例如字典仓库取 `group`：`String group = context.get("group", String.class);`。运行时只读取上下文、不再做任何反射，因此仓库实现天然对 GraalVM Native Image 友好（AOT 干净）。
-
-</br>翻译仓库注解
-
-```java
-
-@Retention(RetentionPolicy.RUNTIME)
-@Target({ElementType.FIELD, ElementType.ANNOTATION_TYPE, ElementType.TYPE})
-@Repeatable(TransRepos.class)
-public @interface TransRepo {
-
-    /**
-     * @return 仓库名称（默认使用字段名）
-     */
-    String name() default "";
-
-    /**
-     * @return 翻译数据获取仓库
-     */
-    Class<? extends TransRepository<?, ?>> using();
-}
-```
-
-## 二、优点
-
-1. **核心源码简单**：`easy-trans-core` 仅数百行，无任何第三方依赖，可嵌入任意项目；
-2. **高度可扩展**：拓展数据源只需实现 `TransRepository` 一个接口；
-3. **功能完备**：支持数据库翻译、字典翻译、集合翻译、嵌套翻译、包装对象翻译等；
-4. **并行翻译**：不同仓库的字段并行取数，批量翻译性能高；
-5. **异常安全**：初始化、仓库注册、引用等异常场景统一抛出 `TransException`，不再静默吞掉；
-6. **可观测**：内置指标接口，Spring 环境下自动桥接 Micrometer，便于监控翻译耗时；
-7. **有界缓存**：类元数据缓存采用 LRU（默认上限 1024），内存可控。
-
-## 三、基本使用
-
-maven引入
+从 Maven Central 获取（coordinates 如下）；若需本地构建，克隆仓库后执行 `mvn clean install` 安装到本地仓库。
 
 ```xml
+<dependency>
+    <groupId>io.github.orangewest</groupId>
+    <artifactId>easy-trans-spring-start</artifactId>
+    <version>2.0.0</version>
+</dependency>
+```
 
+若不使用 Spring，仅引入 core 即可：
+
+```xml
 <dependency>
     <groupId>io.github.orangewest</groupId>
     <artifactId>easy-trans-core</artifactId>
@@ -202,338 +122,186 @@ maven引入
 </dependency>
 ```
 
-比如现在有一个老师的实体对象
+### 2. 定义 DTO 上的翻译关系
 
 ```java
-
-@Data
-@AllArgsConstructor
-@NoArgsConstructor
-public class TeacherDto {
-
-    private Long id;
-
-    private String name;
-
-    // 关联教哪个学科
-    private Long subjectId;
-
-}
-
-```
-
-课程科目实体对象
-
-```java
-
-@Data
-@AllArgsConstructor
-@NoArgsConstructor
-public class SubjectDto {
-
-    private Long id;
-
-    private String name;
-
-}
-
-```
-
-学生实体对象
-
-```java
-@Data
 public class UserDto {
-
-    private Long id;
-
-    private String name;
-
-    @DictTransRepo(group = "sexDict")
-    private String sex;
-
-    @Trans(trans = "sex")
-    private String sexName;
-
-    @DictTransRepo(group = "jobDict")
-    private String job;
-
-    @Trans(trans = "job")
-    private String jobName;
-
+    // 原始值字段：声明数据源
     @TransRepo(using = TeacherTransRepository.class)
     private Long teacherId;
 
+    // 展示字段：从 teacherId 取数，提取其 name 属性
     @Trans(trans = "teacherId", key = "name")
     private String teacherName;
 
-    @TransRepo(using = SubjectTransRepository.class)
-    @Trans(trans = "teacherId", key = "subjectId")
-    private Long subjectId;
-
-    @Trans(trans = "subjectId", key = "name")
-    private String subjectName;
-
-    private String deptCode;
-
-    @Trans(trans = "deptCode", key = "name", using = DeptTransRepository.class)
-    private String deptName;
-
-    public UserDto(Long id, String name, Long teacherId, String sex, String job, String deptCode) {
-        this.id = id;
-        this.name = name;
-        this.teacherId = teacherId;
-        this.sex = sex;
-        this.job = job;
-        this.deptCode = deptCode;
-    }
+    // getter / setter
 }
 ```
 
-**1、定义翻译仓库**</br>
-我们在teacherId上增加@TransRepo注解，using 说明的是使用哪个数据仓库获取数据</br>
-**2、定义提取字段**</br>
-然后我们在teacherName上增加@Trans的注解；</br>
-其中trans 指的是从哪个仓库获取数据，key说明需要从仓库中提取的哪个字段；</br>
-其他字段同理；</br>
-也可以直接在@Trans注解上使用using指定翻译仓库，这个时候会使用这个仓库进行翻译；</br>
+### 3. 实现数据源
 
-TeacherTransRepository 代码如下：
+唯一需要自己实现的接口是 `TransRepository`：
 
 ```java
 public class TeacherTransRepository implements TransRepository<Long, TeacherDto> {
 
     @Override
-    public Map<Long, TeacherDto> getTransValueMap(List<Long> transValues, TransContext context) {
-        return getTeachers().stream()
-                .filter(x -> transValues.contains(x.getId()))
+    public Map<Long, TeacherDto> getTransValueMap(List<Long> ids, TransContext ctx) {
+        // 任意数据源：SQL、缓存、RPC……
+        return teacherService.listByIds(ids).stream()
                 .collect(Collectors.toMap(TeacherDto::getId, x -> x));
     }
-
-    public List<TeacherDto> getTeachers() {
-        List<TeacherDto> teachers = new ArrayList<>();
-        teachers.add(new TeacherDto(1L, "老师1", 1L));
-        teachers.add(new TeacherDto(2L, "老师2", 2L));
-        teachers.add(new TeacherDto(3L, "老师3", 3L));
-        teachers.add(new TeacherDto(4L, "老师4", 4L));
-        return teachers;
-    }
-
-}
-
-
-```
-
-模拟根据id查询，获取指定id的数据。
-SubjectTransRepository
-
-```java
-public class SubjectTransRepository implements TransRepository<Long, SubjectDto> {
-
-    @Override
-    public Map<Long, SubjectDto> getTransValueMap(List<Long> transValues, TransContext context) {
-        return getSubjects().stream()
-                .filter(x -> transValues.contains(x.getId()))
-                .collect(Collectors.toMap(SubjectDto::getId, x -> x));
-    }
-
-    public List<SubjectDto> getSubjects() {
-        List<SubjectDto> subjects = new ArrayList<>();
-        subjects.add(new SubjectDto(1L, "语文"));
-        subjects.add(new SubjectDto(2L, "数学"));
-        subjects.add(new SubjectDto(3L, "英语"));
-        subjects.add(new SubjectDto(4L, "物理"));
-        return subjects;
-    }
-
 }
 ```
 
-注册翻译仓库：
+`getTransValueMap` 的入参是本次需要翻译的**去重后的所有原始值**，返回 `原始值 -> 结果对象` 的映射，框架负责把结果写回每个目标字段。
+
+### 4. 注册并执行翻译
+
+**非 Spring 环境**：注册仓库后直接调用 `trans()`。执行器在首次翻译时按需创建（懒加载虚拟线程执行器），无需手动初始化。
 
 ```java
-    @BeforeAll
-public static void before() {
-    TransRepositoryFactory.register(new TeacherTransRepository());
-    TransRepositoryFactory.register(new TeacherTrans2Repository());
-    TransRepositoryFactory.register(new SubjectTransRepository());
-    TransRepositoryFactory.register(new DeptTransRepository());
-    TransRepositoryFactory.register(new TeacherAndSubjectTransRepository());
-    TransRepositoryFactory.register(new CityTransRepository());
-    TransRepositoryFactory.register(new DictTransRepository(new DictLoader() {
-@Override
-public Map<String, String> loadDict(String dictGroup) {
-        return dictMap().getOrDefault(dictGroup, new HashMap<>());
-    }
+TransRepositoryFactory.register(new TeacherTransRepository());
 
-private Map<String, Map<String, String>> dictMap() {
-        Map<String, Map<String, String>> map = new HashMap<>();
-        map.put("sexDict", new HashMap<>());
-        map.put("jobDict", new HashMap<>());
-        map.get("sexDict").put("1", "男");
-        map.get("sexDict").put("2", "女");
-        map.get("jobDict").put("1", "学习委员");
-        map.get("jobDict").put("2", "生活委员");
-        map.get("jobDict").put("3", "宣传委员");
-        map.get("jobDict").put("4", "班长");
-        map.get("jobDict").put("5", "团支书");
-        map.get("jobDict").put("6", "团长");
-        return map;
-    }
+UserDto user = new UserDto();
+user.setTeacherId(2L);
+new TransService().trans(user);
 
-    }));
-    TransObjResolverFactory.register(new ResultResolver());
-}
-
+// user.getTeacherName() == "老师2"
 ```
 
-代码测试：
+**Spring 环境**：把仓库标 `@Component` 即可被自动注册，详见[与 Spring Boot 集成](#与-spring-boot-集成)。
+
+## 核心设计
+
+翻译过程可拆为四步：
+
+1. 适配 trans：TransValueResolver 拆 Result / Page 等包装对象；异步/响应式返回值（CompletionStage / Mono / Flux）延迟到值就绪后再翻译。
+2. 解析元数据：首次遇到该类时构建 TransClassMeta，按字段引用关系生成翻译树（无锁缓存）。
+3. 分组并行取数 doTrans：按 @TransRepo 分组，各组用虚拟线程并行调用对应的 TransRepository。
+4. 回填字段：按 @Trans 把取到的值写回目标字段（支持对象 / 集合 / 嵌套）。
+
+四个核心角色：
+
+| 角色 | 职责 |
+| --- | --- |
+| `@Trans` | 标注在**目标字段**上，声明「从哪个源字段取数、提取哪个属性」。 |
+| `@TransRepo` | 标注在**源字段**上，把源字段绑定到某个 `TransRepository`；可重复、可用在自定义注解上作为元注解。 |
+| `TransRepository<T, R>` | 唯一需实现的接口，`getTransValueMap` 从任意数据源批量取数。 |
+| `TransValueResolver` | 统一扩展点：拆 `Result`/`Page` 等包装对象，或处理 `CompletionStage`/`Mono`/`Flux` 等异步/响应式返回值（延迟翻译）。 |
+
+## 注解与接口
 
 ```java
-@Test
-void trans1(){
-    UserDto userDto=new UserDto(1L,"张三",2L,"1","2","1");
-    System.out.println("翻译前："+userDto);
-    transService.trans(userDto);
-    System.out.println("翻译后："+userDto);
-    Assertions.assertEquals("男",userDto.getSexName());
-    Assertions.assertEquals("生活委员",userDto.getJobName());
-    Assertions.assertEquals("老师2",userDto.getTeacherName());
-    Assertions.assertEquals("数学",userDto.getSubjectName());
-    List<UserDto> userDtoList=new ArrayList<>();
-    UserDto userDto2=new UserDto(2L,"李四",1L,"2","1","1");
-    UserDto userDto3=new UserDto(3L,"王五",2L,"1","3","2");
-    UserDto userDto4=new UserDto(4L,"赵六",3L,"2","4","2");
-    userDtoList.add(userDto4);
-    userDtoList.add(userDto3);
-    userDtoList.add(userDto2);
-    System.out.println("翻译前："+userDtoList);
-    transService.trans(userDtoList);
-    System.out.println("翻译后："+userDtoList);
-}
-```
-
-结果输出
-
-```java
-翻译前：UserDto(id=1,name=张三,sex=1,sexName=null,job=2,jobName=null,teacherId=2,teacherName=null,subjectId=null,subjectName=null,deptCode=1,deptName=null)
-翻译后：UserDto(id=1,name=张三,sex=1,sexName=男,job=2,jobName=生活委员,teacherId=2,teacherName=老师2,subjectId=2,subjectName=数学,deptCode=1,deptName=部门1)
-翻译前：[UserDto(id=4,name=赵六,sex=2,sexName=null,job=4,jobName=null,teacherId=3,teacherName=null,subjectId=null,subjectName=null,deptCode=2,deptName=null),UserDto(id=3,name=王五,sex=1,sexName=null,job=3,jobName=null,teacherId=2,teacherName=null,subjectId=null,subjectName=null,deptCode=2,deptName=null),UserDto(id=2,name=李四,sex=2,sexName=null,job=1,jobName=null,teacherId=1,teacherName=null,subjectId=null,subjectName=null,deptCode=1,deptName=null)]
-翻译后：[UserDto(id=4,name=赵六,sex=2,sexName=女,job=4,jobName=班长,teacherId=3,teacherName=老师3,subjectId=3,subjectName=英语,deptCode=2,deptName=部门2),UserDto(id=3,name=王五,sex=1,sexName=男,job=3,jobName=宣传委员,teacherId=2,teacherName=老师2,subjectId=2,subjectName=数学,deptCode=2,deptName=部门2),UserDto(id=2,name=李四,sex=2,sexName=女,job=1,jobName=学习委员,teacherId=1,teacherName=老师1,subjectId=1,subjectName=语文,deptCode=1,deptName=部门1)]
-```
-
-## 四、高级功能
-
-### 1、自定义注解
-
-使用@TransRepo注解标注在自定义注解上即可，比如框架自带的字典翻译@DictTransRepo
-示例：
-
-```java
-
 @Retention(RetentionPolicy.RUNTIME)
-@Target({ElementType.FIELD})
+@Target({ElementType.FIELD, ElementType.ANNOTATION_TYPE})
+public @interface Trans {
+    String trans() default "";   // 源字段名（或仓库名）；作元注解时可由自定义注解自身声明
+    String key() default "";     // 从结果对象中提取的属性，省略取目标字段名
+    Class<? extends TransRepository<?, ?>> using() default None.class; // 直接指定仓库，强约束按 trans() 名匹配 @TransRepo
+
+    interface None extends TransRepository<Object, Object> {}
+}
+```
+
+```java
+@Retention(RetentionPolicy.RUNTIME)
+@Target({ElementType.FIELD, ElementType.ANNOTATION_TYPE, ElementType.TYPE})
+@Repeatable(TransRepos.class)
+public @interface TransRepo {
+    String name() default "";    // 仓库名，省略用字段名
+    Class<? extends TransRepository<?, ?>> using(); // 绑定的数据源（必填）
+}
+```
+
+```java
+public interface TransRepository<T, R> {
+    Map<T, R> getTransValueMap(List<T> transValues, TransContext context);
+}
+```
+
+`TransContext` 在**元数据解析阶段**一次性读取源注解属性（如 `@DictTrans` 的 `group`、`@DbTransRepo` 的 `entity`），运行时只读、不再反射，因此天然兼容 GraalVM Native Image：
+
+```java
+public interface TransContext {
+    Object get(String attribute);
+    <V> V get(String attribute, Class<V> type);
+    String repoName();
+    default Class<?> sourceType() { return null; } // 供「枚举即字典」推断枚举类
+}
+```
+
+## 使用详解
+
+### 字典翻译 @DictTrans
+
+框架内置 `@DictTrans`（本质是 `@Trans(using = DictTransRepository.class)` 的元注解），标注在**目标字段**上，通过 `group` 区分不同字典，`trans` 指向持有原始 code 的源字段：
+
+```java
+private String sex;
+
+@DictTrans(group = "sex", trans = "sex")
+private String sexName;
+```
+
+`DictTransRepository` 由调用方提供 `DictLoader` 注入字典数据，在 Spring 环境中当容器存在 `DictLoader` Bean 时自动装配。`DictLoader` 是一个函数式接口：
+
+```java
+@FunctionalInterface
+public interface DictLoader {
+    Map<String, String> loadDict(String dictGroup); // 返回 code -> 展示值
+}
+```
+
+### 枚举翻译 @EnumTrans
+
+框架内置 `@EnumTrans`（本质是 `@Trans(using = EnumTransRepository.class)` 的元注解），用于「枚举即字典」。它有两种常见用法：
+
+**用法一：源字段本身就是枚举对象**（枚举类从源字段类型自动推断，`key` 默认取 `label`）：
+
+```java
+public enum SexEnum {
+    MALE(1, "男"), FEMALE(2, "女");
+    private final int code;
+    private final String label;
+    // getters
+}
+
+private SexEnum sex;
+
+@EnumTrans(trans = "sex")        // 默认 enumClass 从 sex 字段类型推断，key 默认 "label"
+private String sexLabel;         // "男" / "女"
+```
+
+**用法二：源字段是 code（如 `int`）**（需显式指定 `enumClass` 与用于匹配的 `code` 字段）：
+
+```java
+private int sexCode;
+
+@EnumTrans(trans = "sexCode", enumClass = SexEnum.class, code = "code")
+private String sexLabel;
+```
+
+`EnumTransRepository` 在 Spring 环境中由框架无条件注册，无需手动声明。
+
+### 集合与数组翻译
+
+当源或目标为集合 / 数组时，框架按元素翻译，保持顺序：
+
+```java
 @TransRepo(using = TeacherTransRepository.class)
-public @interface TeacherTransRepo {
+private List<Long> teacherIds;
 
-    String name() default "";
-
-}
-
+@Trans(trans = "teacherIds", key = "name")
+private List<String> teacherNames;  // ["老师1", "老师2"]
 ```
 
-```java
+### 嵌套翻译
 
-@Data
-public class UserDto2 {
-
-    private Long id;
-
-    private String name;
-
-
-    @TeacherTransRepo
-    private List<Long> teacherIds;
-
-    @DictTransRepo(group = "jobDict")
-    private List<String> jobIds;
-
-    @Trans(trans = "jobIds")
-    private List<String> jobNames;
-
-    @Trans(trans = "teacherIds", key = "name")
-    private List<String> teacherName;
-
-    @Trans(trans = "teacherIds", key = "subjectId")
-    @TransRepo(using = SubjectTransRepository.class)
-    private List<Long> subjectIds;
-
-    @Trans(trans = "subjectIds", key = "name")
-    private List<String> subjectNames;
-
-    public UserDto2(Long id, String name, List<Long> teacherIds, List<String> jobIds) {
-        this.id = id;
-        this.name = name;
-        this.teacherIds = teacherIds;
-        this.jobIds = jobIds;
-    }
-}
-```
-
-测试
+框架按字段引用关系自动构建翻译树，支持多层级联。下例中 `areaId -> cityId -> provinceId` 形成链路：
 
 ```java
-@Test
-void trans2() {
-    List<Long> teacherIds=new ArrayList<>();
-    teacherIds.add(1L);
-    teacherIds.add(2L);
-    List<String> jobIds=new ArrayList<>();
-    jobIds.add("1");
-    jobIds.add("2");
-    UserDto2 userDto=new UserDto2(1L,"张三",teacherIds,jobIds);
-    System.out.println("翻译前："+userDto);
-    transService.trans(userDto);
-    System.out.println("翻译后："+userDto);
-    List<UserDto2> userDtoList=new ArrayList<>();
-    UserDto2 userDto2=new UserDto2(2L,"李四",teacherIds,jobIds);
-    List<Long> teacherIds2=new ArrayList<>();
-    teacherIds2.add(3L);
-    teacherIds2.add(4L);
-    List<String> jobIds2=new ArrayList<>();
-    jobIds2.add("3");
-    jobIds2.add("4");
-    UserDto2 userDto3=new UserDto2(3L,"王五",teacherIds2,jobIds2);
-    UserDto2 userDto4=new UserDto2(4L,"赵六",teacherIds2,jobIds2);
-    userDtoList.add(userDto4);
-    userDtoList.add(userDto3);
-    userDtoList.add(userDto2);
-    System.out.println("翻译前："+userDtoList);
-    transService.trans(userDtoList);
-    System.out.println("翻译后："+userDtoList);
-}
-
-```
-
-结果输出
-
-```java
-翻译前：UserDto2(id=1,name=张三,teacherIds=[1,2],jobIds=[1,2],jobNames=null,teacherName=null,subjectIds=null,subjectNames=null)
-翻译后：UserDto2(id=1,name=张三,teacherIds=[1,2],jobIds=[1,2],jobNames=[学习委员,生活委员],teacherName=[老师1,老师2],subjectIds=[1,2],subjectNames=[语文,数学])
-翻译前：[UserDto2(id=4,name=赵六,teacherIds=[3,4],jobIds=[3,4],jobNames=null,teacherName=null,subjectIds=null,subjectNames=null),UserDto2(id=3,name=王五,teacherIds=[3,4],jobIds=[3,4],jobNames=null,teacherName=null,subjectIds=null,subjectNames=null),UserDto2(id=2,name=李四,teacherIds=[1,2],jobIds=[1,2],jobNames=null,teacherName=null,subjectIds=null,subjectNames=null)]
-翻译后：[UserDto2(id=4,name=赵六,teacherIds=[3,4],jobIds=[3,4],jobNames=[宣传委员,班长],teacherName=[老师3,老师4],subjectIds=[3,4],subjectNames=[英语,物理]),UserDto2(id=3,name=王五,teacherIds=[3,4],jobIds=[3,4],jobNames=[宣传委员,班长],teacherName=[老师3,老师4],subjectIds=[3,4],subjectNames=[英语,物理]),UserDto2(id=2,name=李四,teacherIds=[1,2],jobIds=[1,2],jobNames=[学习委员,生活委员],teacherName=[老师1,老师2],subjectIds=[1,2],subjectNames=[语文,数学])]
-```
-
-### 2、嵌套翻译
-
-本框架支持多层嵌套翻译，比如翻译省市区，只要按翻译逻辑顺序定义好就行。框架会根据字段间的引用关系自动构建 `key → 子字段` 的翻译树，逐层回填。</br>
-示例：
-
-```java
-
-@Data
 public class CityDto {
-
     @TransRepo(using = CityTransRepository.class)
     private Long areaId;
 
@@ -548,285 +316,102 @@ public class CityDto {
     private String cityName;
 
     @Trans(trans = "cityId", key = "pid")
-//    @TransRepo(using = CityTransRepository.class)
     private Long provinceId;
 
     @Trans(trans = "provinceId", key = "name", using = CityTransRepository.class)
     private String provinceName;
-
-
-    public CityDto(Long areaId) {
-        this.areaId = areaId;
-    }
-
 }
 ```
 
-```java
-public class CityTransRepository implements TransRepository<Long, CityEntity> {
+翻译 `areaId=7`（长沙市）后得到：`areaName=长沙县`、`cityId=2`、`cityName=长沙市`、`provinceId=1`、`provinceName=湖南省`。
 
+链路依赖每一级的 `key` 都能在数据源中找到对应记录。若某级缺失（如 `pid` 指向不存在的 id），该级及后续层级字段保持 `null`——这是数据缺失的正常结果，不是框架缺陷。
+
+### 包装对象与异步/响应式
+
+返回值是 `Result<T>`、`PageData<T>` 这类包装类型时，注册 `TransValueResolver` 拆包即可让翻译触达内部业务对象（与异步/响应式返回值的处理是同一个扩展点）：
+
+```java
+public class ResultResolver implements TransValueResolver {
     @Override
-    public Map<Long, CityEntity> getTransValueMap(List<Long> transValues, TransContext context) {
-        return data().stream()
-                .filter(x -> transValues.contains(x.getId()))
-                .collect(Collectors.toMap(CityEntity::getId, x -> x));
+    public boolean supports(Class<?> type) {
+        return Result.class.isAssignableFrom(type);
     }
-
-    private List<CityEntity> data() {
-        List<CityEntity> cityEntities = new ArrayList<>();
-        cityEntities.add(new CityEntity(1L, "湖南省", 0L));
-        cityEntities.add(new CityEntity(2L, "长沙市", 1L));
-        cityEntities.add(new CityEntity(3L, "株洲市", 1L));
-        cityEntities.add(new CityEntity(4L, "湘潭市", 1L));
-        cityEntities.add(new CityEntity(5L, "雨花区", 2L));
-        cityEntities.add(new CityEntity(6L, "岳麓区", 2L));
-        cityEntities.add(new CityEntity(7L, "长沙县", 2L));
-        cityEntities.add(new CityEntity(8L, "测试县", 10L));
-        return cityEntities;
-    }
-
-}
-
-@Data
-@AllArgsConstructor
-public class CityEntity {
-
-    private Long id;
-
-    private String name;
-
-    private Long pid;
-
-}
-
-```
-
-测试代码：
-
-```java
-@Test
-void trans6(){
-    CityDto cityDto=new CityDto(7L);
-    System.out.println("翻译前："+cityDto);
-    transService.trans(cityDto);
-    System.out.println("翻译后："+cityDto);
-    Assertions.assertEquals("长沙县",cityDto.getAreaName());
-    Assertions.assertEquals("长沙市",cityDto.getCityName());
-    Assertions.assertEquals("湖南省",cityDto.getProvinceName());
-    List<CityDto> cityDtoList=new ArrayList<>();
-    cityDtoList.add(new CityDto(7L));
-    cityDtoList.add(new CityDto(8L));
-    System.out.println("翻译前："+cityDtoList);
-    transService.trans(cityDtoList);
-    System.out.println("翻译后："+cityDtoList);
-    Assertions.assertEquals("长沙县",cityDtoList.get(0).getAreaName());
-    Assertions.assertEquals("长沙市",cityDtoList.get(0).getCityName());
-    Assertions.assertEquals("湖南省",cityDtoList.get(0).getProvinceName());
-    Assertions.assertEquals("测试县",cityDtoList.get(1).getAreaName());
-    Assertions.assertNull(cityDtoList.get(1).getCityName());
-    Assertions.assertNull(cityDtoList.get(1).getProvinceName());
-}
-
-```
-
-翻译结果如下：
-
-```java
-翻译前：CityDto(areaId=7,areaName=null,cityId=null,cityName=null,provinceId=null,provinceName=null)
-翻译后：CityDto(areaId=7,areaName=长沙县,cityId=2,cityName=长沙市,provinceId=1,provinceName=湖南省)
-翻译前：[CityDto(areaId=7,areaName=null,cityId=null,cityName=null,provinceId=null,provinceName=null),CityDto(areaId=8,areaName=null,cityId=null,cityName=null,provinceId=null,provinceName=null)]
-翻译后：[CityDto(areaId=7,areaName=长沙县,cityId=2,cityName=长沙市,provinceId=1,provinceName=湖南省),CityDto(areaId=8,areaName=测试县,cityId=10,cityName=null,provinceId=null,provinceName=null)]
-```
-
-> 注意：`areaId=8`（测试县）的 `pid=10` 在数据源中不存在，因此 `cityId`、`provinceId` 等后续层级无法继续翻译，对应字段为 `null`。这是**数据缺失**导致的预期行为，而非框架缺陷——只要链路上的每个 key 都能在仓库中找到对应记录，嵌套翻译即可正常完成。
-
-### 3、包装类翻译
-
-有些类是包装类，比如返回的结果，返回的分页对象等，需要翻译的数据一般都是里面的实际业务对象，这时候，需要我们去配置解析包装类的解析器。
-示例：
-
-```java
-
-@Data
-@AllArgsConstructor
-public class Result<T> {
-
-    private T data;
-
-    private String message;
-
-}
-
-```
-
-配置解析器，实现TransObjResolver接口即可
-
-```java
-public class ResultResolver implements TransObjResolver {
-
     @Override
-    public boolean support(Object obj) {
-        return obj instanceof Result;
-    }
-
-    @Override
-    public Object resolveTransObj(Object obj) {
-        return ((Result<?>) obj).getData();
-    }
-
-}
-
-```
-
-```java
-TransObjResolverFactory.register(new ResultResolver());
-```
-
-测试：
-
-```java
-@Test
-void trans3() {
-    List<Long> teacherIds=new ArrayList<>();
-    teacherIds.add(1L);
-    teacherIds.add(2L);
-    List<String> jobIds=new ArrayList<>();
-    jobIds.add("1");
-    jobIds.add("2");
-    jobIds.add("3");
-    UserDto2 userDto=new UserDto2(1L,"张三",teacherIds,jobIds);
-    Result<UserDto2> result=new Result<>(userDto,"success");
-    System.out.println("翻译前："+result);
-    transService.trans(result);
-    System.out.println("翻译后："+result);
-    UserDto2 userDto2=new UserDto2(2L,"李四",teacherIds,jobIds);
-    Result<UserDto2> result2=new Result<>(userDto2,"success");
-    Result<Result<UserDto2>>result3=new Result<>(result2,"success");
-    System.out.println("翻译前："+result3);
-    transService.trans(result3);
-    System.out.println("翻译后："+result3);
-}
-
-```
-
-结果输出：
-
-```java
-翻译前：Result(data=UserDto2(id=1,name=张三,teacherIds=[1,2],jobIds=[1,2,3],jobNames=null,teacherName=null,subjectIds=null,subjectNames=null),message=success)
-翻译后：Result(data=UserDto2(id=1,name=张三,teacherIds=[1,2],jobIds=[1,2,3],jobNames=[学习委员,生活委员,宣传委员],teacherName=[老师1,老师2],subjectIds=[1,2],subjectNames=[语文,数学]),message=success)
-翻译前：Result(data=Result(data=UserDto2(id=2,name=李四,teacherIds=[1,2],jobIds=[1,2,3],jobNames=null,teacherName=null,subjectIds=null,subjectNames=null),message=success),message=success)
-翻译后：Result(data=Result(data=UserDto2(id=2,name=李四,teacherIds=[1,2],jobIds=[1,2,3],jobNames=[学习委员,生活委员,宣传委员],teacherName=[老师1,老师2],subjectIds=[1,2],subjectNames=[语文,数学]),message=success),message=success)
-```
-
-> 包装类拆包由 `TransObjResolver` 负责，框架内置对常见包装类型的解析。若返回值是异步 / 响应式类型（如 `CompletableFuture`、`Mono`、`Flux`），Spring 集成下请使用 `TransUtil.transResult(result)`（详见[五、与 Spring Boot 集成](#五与-spring-boot-集成)），框架会在结果就绪后再执行翻译，而非对包装对象本身翻译（后者会静默失效）。
-
-### 4、对象直接填充
-
-有时候我们可能需要把完整的对象填充到需要翻译的字段中，只需要返回类型和需要翻译的字段的类型一致，框架会自动填充。
-
-```java
-
-@Data
-public class UserDto3 {
-
-    private Long id;
-
-    private String name;
-
-    @TeacherTransRepo
-    @TransRepo(name = "teacherId1", using = TeacherTrans2Repository.class)
-    private Long teacherId;
-
-    @Trans(trans = "teacherId")
-    private TeacherDto teacher;
-
-    @Trans(trans = "teacherId1")
-    private boolean isYuwenTeacher;
-
-    @Trans(trans = "teacherId", using = TeacherTrans2Repository.class)
-    private Boolean isYuwenTeacher2;
-
-    public UserDto3(Long id, String name, Long teacherId) {
-        this.id = id;
-        this.name = name;
-        this.teacherId = teacherId;
+    public Object handle(Object value, Function<Object, Object> translator) {
+        return translator.apply(((Result<?>) value).getData());
     }
 }
-
 ```
 
+非 Spring 环境：`TransValueResolverFactory.register(new ResultResolver())`。
+
+**异步 / 响应式**：框架内置 `CompletionStageResolver`；在 Spring 集成下，当 classpath 存在 Reactor 时，`ReactorTransResolver` 会自动注册，使 `Mono` / `Flux` 返回值在 `map` 阶段完成内部翻译。`easy-trans-core` 本身不静态引用 Reactor，保持零依赖。
+
+### 对象直接填充
+
+当目标字段类型与仓库返回类型一致时，框架填入整个对象；否则按 `key` 提取属性：
+
 ```java
-public class TeacherTrans2Repository implements TransRepository<Long, Boolean> {
+@TransRepo(name = "teacherId1", using = TeacherTrans2Repository.class)
+private Long teacherId;
 
-    @Override
-    public Map<Long, Boolean> getTransValueMap(List<Long> transValues, TransContext context) {
-        return getTeachers().stream()
-                .filter(x -> transValues.contains(x.getId()))
-                .collect(Collectors.toMap(TeacherDto::getId, x -> x.getSubjectId() == 1));
-    }
+@Trans(trans = "teacherId")             // 类型一致 -> 填入整个 TeacherDto
+private TeacherDto teacher;
 
-    public List<TeacherDto> getTeachers() {
-        List<TeacherDto> teachers = new ArrayList<>();
-        teachers.add(new TeacherDto(1L, "老师1", 1L));
-        teachers.add(new TeacherDto(2L, "老师2", 2L));
-        teachers.add(new TeacherDto(3L, "老师3", 3L));
-        teachers.add(new TeacherDto(4L, "老师4", 4L));
-        return teachers;
-    }
+@Trans(trans = "teacherId", key = "name")
+private String teacherName;             // 提取 name 属性
+```
 
+### 自定义元注解
+
+`@TransRepo` 与 `@Trans` 都可作为元注解用在自定义注解上，把重复的声明收敛成语义化注解。前者绑定**数据源**，后者声明**翻译规则**。
+
+**`@TransRepo` 元注解（绑定数据源）** —— 框架内置的 `@DictTrans`、`@EnumTrans` 即采用 `@Trans` 元注解（见上）；自定义数据源元注解同理：
+
+```java
+@TransRepo(using = TeacherTransRepository.class)
+@Target(ElementType.FIELD)
+@Retention(RetentionPolicy.RUNTIME)
+public @interface TeacherTransRepo {
+    String name() default "";
+}
+```
+
+源字段上写 `@TeacherTransRepo` 即等价于 `@TransRepo(using = TeacherTransRepository.class)`。
+
+**`@Trans` 元注解（声明翻译规则）** —— 把 `trans` / `key` / `using` 直接固化进自定义注解，字段上只需一行语义化声明：
+
+```java
+@Trans(trans = "teacherId", key = "name")
+@Target(ElementType.FIELD)
+@Retention(RetentionPolicy.RUNTIME)
+public @interface TeacherName {
 }
 ```
 
 ```java
-@Test
-void trans4(){
-    UserDto3 userDto=new UserDto3(1L,"张三",1L);
-    System.out.println("翻译前："+userDto);
-    transService.trans(userDto);
-    System.out.println("翻译后："+userDto);
-    Assertions.assertNotNull(userDto.getTeacher());
-    Assertions.assertEquals("老师1",userDto.getTeacher().getName());
-    Assertions.assertTrue(userDto.isYuwenTeacher());
-    Assertions.assertTrue(userDto.getIsYuwenTeacher2());
-    List<UserDto3> userDtoList=new ArrayList<>();
-    UserDto3 userDto2=new UserDto3(2L,"李四",1L);
-    UserDto3 userDto3=new UserDto3(3L,"王五",2L);
-    UserDto3 userDto4=new UserDto3(4L,"赵六",3L);
-    userDtoList.add(userDto2);
-    userDtoList.add(userDto3);
-    userDtoList.add(userDto4);
-    System.out.println("翻译前："+userDtoList);
-    transService.trans(userDtoList);
-    System.out.println("翻译后："+userDtoList);
-    Assertions.assertNotNull(userDtoList.get(0).getTeacher());
-    Assertions.assertEquals("老师1",userDtoList.get(0).getTeacher().getName());
-    Assertions.assertTrue(userDtoList.get(0).isYuwenTeacher());
-    Assertions.assertTrue(userDtoList.get(0).getIsYuwenTeacher2());
-    Assertions.assertNotNull(userDtoList.get(1).getTeacher());
-    Assertions.assertEquals("老师2",userDtoList.get(1).getTeacher().getName());
-    Assertions.assertFalse(userDtoList.get(1).isYuwenTeacher());
-    Assertions.assertFalse(userDtoList.get(1).getIsYuwenTeacher2());
-    Assertions.assertNotNull(userDtoList.get(2).getTeacher());
-    Assertions.assertEquals("老师3",userDtoList.get(2).getTeacher().getName());
-    Assertions.assertFalse(userDtoList.get(2).isYuwenTeacher());
-    Assertions.assertFalse(userDtoList.get(2).getIsYuwenTeacher2());
-}
+@TeacherTransRepo
+private Long teacherId;
+
+@TeacherName                 // 等价于 @Trans(trans = "teacherId", key = "name")
+private String teacherName;
 ```
 
-### 5、异常处理
+若元 `@Trans` 未写 `trans` / `key`，框架会回退读取自定义注解自身声明的 `trans()` / `key()` 成员，使同一注解能按字段差异传参。自定义元注解声明的属性（如 `@DictTrans.group()`）会在解析阶段进入 `TransContext`，供仓库取用。
 
-翻译过程中若出现配置或运行问题，框架统一抛出 `TransException`（运行时异常），便于及时定位，而非像旧版本那样静默失败。常见场景：
+### 异常处理
 
-- **仓库未注册**：`@TransRepo` 指向的 `TransRepository` 未通过 `TransRepositoryFactory.register(...)`（或 Spring 下未标注 `@Component`）注册，翻译时抛出 `TransRepository is not registered`；
-- **引用悬空**：`@Trans(trans = "xxx")` 指向的源字段 `xxx` 在类上既没有同名 `@TransRepo`、也没有通过 `@Trans(using = ...)` 显式指定仓库，抛出 `references translation repository 'xxx' which is not declared`；
-- **字段不存在**：`@Trans(using = X, trans = "yyy")` 中 `yyy` 在类中不存在，抛出 `but no such field exists`；
-- **循环引用**：嵌套翻译配置形成环路（如 A 依赖 B、B 又依赖 A），构建翻译树时抛出 `Circular translation reference detected`。
+翻译执行前，框架会为目标类构建一次元数据。若注解配置存在问题，构建阶段直接抛出 `TransException`（运行时异常），并附带类名与字段名：
 
-> 这些校验在类元数据解析阶段（首次翻译该类时）和翻译执行阶段都会进行，错误信息包含类名与字段名，便于快速定位。
+- **引用悬空**：`@Trans(trans = "xxx")` 指向的源字段 `xxx` 既无同名 `@TransRepo`、也未通过 `@Trans(using = ...)` 指定仓库 —— `references translation repository 'xxx' which is not declared`。
+- **字段不存在**：`@Trans(using = X, trans = "yyy")` 中 `yyy` 在类中不存在 —— `but no such field exists in class ...`。
+- **仓库未注册**：翻译时 `@TransRepo` 指向的 `TransRepository` 未注册（未 `register(...)` 或 Spring 下未标 `@Component`）—— `TransRepository is not registered`。
+- **循环引用**：嵌套翻译形成环（A 依赖 B、B 又依赖 A）—— `Circular translation reference detected`。
 
-## 五、与 Spring Boot 集成
+## 与 Spring Boot 集成
 
-maven 引入
+引入 `easy-trans-spring-start` 后，框架通过 Spring Boot 自动配置装配，无需手动初始化或注册：
 
 ```xml
 <dependency>
@@ -836,229 +421,179 @@ maven 引入
 </dependency>
 ```
 
-### 自动装配
+自动配置（`EasyTransAutoConfiguration`）负责：
 
-引入 `easy-trans-spring-start` 后，框架通过 Spring Boot 自动配置（2.x 为 `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`，1.x 为 `spring.factories`）装配 `EasyTransAutoConfiguration`，无需任何额外配置即可使用：
+- 创建并装配 `TransService`（`@ConditionalOnMissingBean` 可覆盖）；
+- 扫描容器中的所有 `TransRepository`、`TransValueResolver`、`DictLoader` 实现并注册（标 `@Component` 即可，无需手动 `register`）；
+- 注册 `@AutoTrans` 切面与 `TransUtil`。
 
-- 自动创建并注册一个 `TransService` 实例（单例，`@ConditionalOnMissingBean` 可覆盖；无需手动 `init()`，虚拟线程执行器在首次 `trans()` 时懒创建）；
-- 自动扫描容器中所有 `TransRepository`、`TransObjResolver`、`DictLoader` 实现类并注册（标注 `@Component` 即可，无需手动 `register`）；
-- 自动注册 `@AutoTrans` 切面与 `TransUtil`。
+具体装配项：
+- `TransService`（`@ConditionalOnMissingBean`）
+- `DictTransRepository`（仅在容器存在 `DictLoader` Bean 时）
+- `EasyTransRegister`（`BeanPostProcessor`，自动注册 `@Component` 的仓库/解析器）
+- `AutoTransAspect`
+- `TransUtil`
+- `EnumTransRepository`（无条件注册）
+- `ReactorTransResolver`（仅在 classpath 存在 `reactor.core.publisher.Mono` 时）
+- `TransMetricsMicrometer`（仅在 classpath 存在 `io.micrometer.observation.ObservationRegistry` 时；否则退化为 `NoopTransMetrics`）
 
 ### 在方法上自动翻译
 
-只需在需要翻译的返回值方法上标注 `@AutoTrans`，框架会拦截返回值并完成翻译：
+在返回结果的方法上标注 `@AutoTrans`，切面会拦截返回值并完成翻译：
 
 ```java
 @GetMapping("/query")
 @AutoTrans
 public Result<PageData<BizDTO>> page(Query query) {
-    PageData<BizDTO> page = bizService.page(query);
-    return new Result<PageData<BizDTO>>().ok(page);
+    return Result.ok(bizService.page(query));
 }
 ```
 
-- **同步返回**：直接对返回值（含 `Result`、`Page` 等包装对象，由 `TransObjResolver` 拆包）执行翻译；
-- **异步 / 响应式返回**：若返回值是 `CompletableFuture`、`Mono`、`Flux` 等，切面会调用 `TransUtil.transResult`，在结果就绪后再翻译，而非对包装对象本身翻译。
+- **同步返回**：直接对返回值（如 `Result`、`Page` 等包装对象）翻译；
+- **异步 / 响应式返回**：返回 `CompletableFuture` / `Mono` / `Flux` 时，切面调用 `TransUtil.trans`，在结果就绪后再翻译（而非对包装对象本身翻译，后者会静默失效）。
 
-### 手动翻译返回值
-
-若需在非 `@AutoTrans` 方法中翻译返回值，可手动调用：
+### 手动翻译
 
 ```java
-Object result = bizService.page(query);
-return TransUtil.transResult(result);   // 自动处理同步 / 异步 / 响应式
+// 自动处理同步 / 异步 / 响应式
+return TransUtil.trans(bizService.page(query));
+
+// 对已就绪对象做同步翻译
+TransUtil.trans(bizDto);
 ```
 
-也可以直接调用 `TransUtil.trans(obj)` 对已经就绪的对象做同步翻译。
+## 可观测性（Micrometer）
 
-### 可选：Micrometer 监控
+`micrometer-core` 在 `easy-trans-spring-start` 中是 **optional** 依赖。当 classpath 存在 Micrometer Observation 且容器中有 `ObservationRegistry` 时，框架自动将翻译指标桥接到 Observation，无需任何代码；否则退化为无指标（零开销）。
 
-`micrometer-core` 在 `easy-trans-spring-start` 中是 **optional 依赖**。当 classpath 中存在 Micrometer Observation 且容器中有 `ObservationRegistry` 时，框架自动将翻译指标桥接到 Micrometer Observation，无需任何代码；否则退化为无指标（零开销）。
+借助 Spring Boot 自动注册的 `TimerObservationHandler`，以下指标以 Timer 形式暴露：
 
-需引入 Micrometer（以 Spring Boot Actuator 为例）：
-
-```xml
-<dependency>
-    <groupId>org.springframework.boot</groupId>
-    <artifactId>spring-boot-starter-actuator</artifactId>
-</dependency>
-<dependency>
-    <groupId>io.micrometer</groupId>
-    <artifactId>micrometer-registry-prometheus</artifactId>
-</dependency>
-```
-
-桥接基于 Micrometer **Observation**：借助 Spring Boot 自动注册的 `TimerObservationHandler`，以下指标会自动以 Timer 形式暴露（并具备链路追踪能力，若运行环境存在 Tracing 基础设施）：
-
-| 指标名 | Tag | 含义 |
+| 指标名 | 低基数 Tag | 含义 |
 | --- | --- | --- |
-| `easytrans.translate` | `success` | 单次 `trans()` 调用耗时 |
-| `easytrans.repository` | `repo`、`success` | 单个翻译仓库耗时（`repo` 为 `@TransRepo` 字段名或 `@Trans` 源字段名） |
+| `easytrans.translate` | `operation`、`depth`、`success` | 单次 `trans()` 调用耗时（整条链路的根 Span） |
+| `easytrans.repository` | `operation`、`repo`、`depth`、`success` | 单个翻译仓库查询耗时（`repo` 为 `@TransRepo` 字段名或 `@Trans` 源字段名） |
+| `easytrans.field` | `operation`、`repo`、`depth`、`success` | 单个目标字段的读取 + 写入耗时（嵌套于 `repository` Span 之下） |
 
-## 六、与 MyBatis / JPA 集成
+三级 Span 自然形成调用树：`translate` -> `repository` -> `field`；嵌套翻译中 `depth` 逐级递推。低基数维度（默认进 tag）防止基数爆炸；高基数维度（`fieldName` / `targetClass` / `repositoryClass`）默认不进 tag，如需下钻可经 `Span#setAttribute` 补充。
 
-前面「基本使用」里的 `TeacherTransRepository`、`SubjectTransRepository` 都是手写 `getTeachers()` 模拟数据。真实项目里，翻译数据源通常是数据库。本框架不绑定任何 ORM，你只需把 `TransRepository` 接到你的持久层即可。下面给出一种**通用数据库翻译**的落地套路（完整可运行示例见仓库 `easy-trans-demo/easy-trans-demo-mybatis`、`easy-trans-demo/easy-trans-demo-jpa`）：
+如需自定义后端（日志、OpenTelemetry 等），实现 `TransMetrics` 后通过 `TransMetricsCollector.set(...)` 或声明为 Spring Bean 注入即可，`easy-trans-core` 不依赖任何监控库。
 
-- 定义一个实体基类 `BaseEntity`（承载主键 `id`）；
-- 定义一个 `DbTransRepo` 注解（`@TransRepo` 元注解，可声明要查哪个实体类）；
-- 定义一个通用的 `DbTransRepository`，通过 `TransDriver` 按 id 批量查库；
-- 为 MyBatis / JPA 各提供一个 `TransDriver` 实现。
+## 与 MyBatis / JPA 集成
 
-### 1、实体基类与翻译注解
+框架不绑定任何 ORM。完整可运行示例见 `easy-trans-demo` 下的 `easy-trans-demo-jpa` 与 `easy-trans-demo-mybatis` 子模块。落地路径为：
+
+1. 定义实体基类 `BaseEntity`（承载主键 `id`）；
+2. 定义自定义 `@DbTransRepo` 元注解（声明要查哪个实体类）；
+3. 定义通用 `DbTransRepository`，通过 `TransDriver` 按 id 批量查库；
+4. 为 MyBatis / JPA 各提供一个 `TransDriver` 实现。
 
 ```java
-// 所有可被翻译的数据库实体都继承它（这里以 JPA 的 @MappedSuperclass 为例，MyBatis 用普通抽象类即可）
-@MappedSuperclass
-public abstract class BaseEntity implements Serializable {
-    @Id
-    private Long id;
-    // creator / createDate 等公共字段……
-    public Long getId() { return id; }
-}
+// 源字段：绑定通用仓库 + 声明实体
+@DbTransRepo(entity = Teacher.class)
+private Long teacherId;
 
-// @TransRepo 元注解：把源字段绑定到通用数据库仓库，并通过 entity() 指定实体类
-@TransRepo(using = DbTransRepository.class)
-@Target(ElementType.FIELD)
-@Retention(RetentionPolicy.RUNTIME)
-public @interface DbTransRepo {
-    String name() default "";                       // 仓库名，默认用字段名
-    Class<? extends BaseEntity> entity() default BaseEntity.class;  // 要查的实体类
-}
+@Trans(trans = "teacherId")             // 类型一致 -> 填入整个 Teacher
+private Teacher teacher;
+
+@Trans(trans = "teacherId", key = "name")
+private String teacherName;
 ```
 
-> `DbTransRepo` 与框架自带的 `@DictTransRepo` 是同一套路：仓库声明在**源字段**上，目标字段用普通 `@Trans(trans = 源字段名)` 引用。
-
-### 2、通用数据库翻译仓库
+通用仓库在运行期通过 `TransContext` 反射地拿到 `entity`：
 
 ```java
 @Component
 public class DbTransRepository implements TransRepository<Long, BaseEntity> {
-
     @Autowired
     private TransDriver transDriver;
 
     @Override
-    public Map<Long, BaseEntity> getTransValueMap(List<Long> transValues, TransContext context) {
-        // entity 由 @DbTransRepo(entity = ...) 通过 TransContext 在解析阶段注入，运行期零反射
-        Class<?> raw = context.get("entity", Class.class);
+    public Map<Long, BaseEntity> getTransValueMap(List<Long> ids, TransContext ctx) {
+        Class<?> raw = ctx.get("entity", Class.class);
         if (raw == null || BaseEntity.class.equals(raw)) {
             return Map.of();
         }
         Class<? extends BaseEntity> entity = (Class<? extends BaseEntity>) raw;
-        List<? extends BaseEntity> entities = transDriver.findByIds(transValues, entity);
-        return entities.stream().collect(Collectors.toMap(BaseEntity::getId, x -> x));
+        return transDriver.findByIds(ids, entity).stream()
+                .collect(Collectors.toMap(BaseEntity::getId, x -> x));
     }
 }
 ```
 
-`TransDriver` 是一个极简接口，把「按 id 批量查某个实体」这件 ORM 相关的事隔离出来：
+`TransDriver` 把「按 id 批量查某个实体」这件与 ORM 相关的事抽离出来：
 
 ```java
 public interface TransDriver {
-    List<? extends BaseEntity> findByIds(List<? extends Serializable> ids, Class<? extends BaseEntity> targetClass);
+    List<? extends BaseEntity> findByIds(List<? extends Serializable> ids,
+                                         Class<? extends BaseEntity> targetClass);
 }
 ```
 
-### 3、在 DTO 上使用
+MyBatis-Plus（基于 `BaseMapper.selectBatchIds`）与 JPA（基于 `EntityManager` 动态 JPQL）的 `TransDriver` 实现见 demo 子模块。在 Spring 环境下，`DbTransRepository` 与具体 `TransDriver` 只要标注 `@Component` 即被自动注册。
 
-```java
-public class UserDto {
+### Native Image 注意事项
 
-    @DbTransRepo(entity = Teacher.class)   // 源字段：绑定仓库 + 声明实体
-    private Long teacherId;
+`@DbTransRepo` 是 `@TransRepo` 元注解的自定义注解，`EasyTransRuntimeHints` 会在 AOT 阶段自动识别（递归扫描元注解）并注册反射元数据，因此 native 构建无需手写 `reflect-config`——只要你的自定义注解使用了 `@TransRepo` 元注解，即可被自动覆盖。
 
-    @Trans(trans = "teacherId")            // 整体对象填充：目标字段类型与 Teacher 一致 → 填入整对象
-    private Teacher teacher;
+## GraalVM Native Image
 
-    @Trans(trans = "teacherId", key = "name")  // 属性提取：从 Teacher 取 name 填入
-    private String teacherName;
+`EasyTransRuntimeHints`（包 `io.github.orangewest.trans.spring.aot`）实现了 `RuntimeHintsRegistrar`，依赖 Spring Boot AOT / Spring Framework AOT hint API。它在 AOT 阶段扫描类路径上字段级标注 `@Trans` / `@TransRepo` / `@DictTrans` / `@TransRepos` 的 DTO，注册字段读写 hint 与注解方法调用 hint，并支持自定义元注解的递归识别。
 
-    // getter / setter
-}
+可通过系统属性 `easy-trans.aot.base-packages` 收敛扫描范围，减少 AOT 扫描开销。
+
+## 模块说明
+
+| 模块 | 职责 |
+| --- | --- |
+| `easy-trans-core` | 框架实现。纯 Java，无外部运行时依赖。包根：`io.github.orangewest.trans`。 |
+| `easy-trans-spring-start` | Spring Boot 4.1.0 自动配置，把 core 接入 Spring 容器；提供 GraalVM Native Image 支持（`EasyTransRuntimeHints`）。 |
+| `easy-trans-demo` | `pom` 聚合模块（本身不发布），下辖 5 个示例子模块，用于验证翻译端到端效果及作为 native-image 构建目标： |
+| &nbsp;&nbsp;- `easy-trans-demo-aot` | AOT / GraalVM native 验证示例。 |
+| &nbsp;&nbsp;- `easy-trans-demo-webflux` | WebFlux（Reactor）响应式翻译示例。 |
+| &nbsp;&nbsp;- `easy-trans-demo-actuator` | 接入 `spring-boot-starter-actuator` + `micrometer-registry-prometheus`，验证翻译指标经 `/actuator/metrics`、`/actuator/prometheus` 暴露；含 `native` profile。 |
+| &nbsp;&nbsp;- `easy-trans-demo-mybatis` | MyBatis 数据源集成示例。 |
+| &nbsp;&nbsp;- `easy-trans-demo-jpa` | JPA 数据源集成示例。 |
+
+## 示例运行
+
+各 demo 子模块均为 Spring Boot 应用，直接运行主类即可：
+
+```bash
+mvn -pl easy-trans-demo-mybatis spring-boot:run
+mvn -pl easy-trans-demo-jpa spring-boot:run
+mvn -pl easy-trans-demo-webflux spring-boot:run
+mvn -pl easy-trans-demo-actuator spring-boot:run   # 随后访问 GET /actuator/metrics/easytrans.translate、/actuator/prometheus
+mvn -pl easy-trans-demo-aot spring-boot:run
 ```
 
-- `teacher` 字段类型就是 `Teacher`，与仓库返回结果类型一致 → 框架**整体填充**整个 `Teacher` 对象（`TransModel` 的 `isFillAll` 判定）；
-- `teacherName` 字段是 `String`，则按 `key = "name"` 从 `Teacher` 抽取属性值填入。
+**Native Image 构建**：仅 `aot`、`webflux`、`actuator` 三个 demo 提供 `native` profile（`mybatis` 与 `jpa` 无）：
 
-> 与 Spring Boot 集成时，`DbTransRepository`、`MybatisTransDriver`/`JpaTransDriver` 只要标注 `@Component` 就会被 `EasyTransAutoConfiguration` 自动注册，无需手动 `register(...)`。
-
-### 4、MyBatis 驱动实现（MyBatis-Plus）
-
-本 demo 使用 **MyBatis-Plus**：其通用 `BaseMapper<T>` 已内置 `selectBatchIds` 等方法，实体 Mapper 直接继承即可，**无需手写任何 SQL / SqlProvider**。
-
-借助 MyBatis-Plus 的 `SqlHelper`，还能按实体类自动定位对应的 `BaseMapper` 与 `SqlSession`，从而**省掉「实体类 → Mapper」的手工注册表**——新增实体时只要提供它的 `BaseMapper` 即可，不必再到某处登记。
-
-```java
-// 实体 Mapper：继承 MyBatis-Plus 的 BaseMapper<T>，开箱即用，不需要 @Select / SqlProvider
-@Mapper
-public interface TeacherMapper extends com.baomidou.mybatisplus.core.mapper.BaseMapper<Teacher> { }
-
-@Component
-public class MybatisTransDriver implements TransDriver {
-
-    @Override
-    @SuppressWarnings("unchecked")
-    public List<? extends BaseEntity> findByIds(List<? extends Serializable> ids, Class<? extends BaseEntity> targetClass) {
-        // SqlHelper 按实体类取出对应的 SqlSession 与 Mapper，无需手工维护映射表
-        try (org.apache.ibatis.session.SqlSession sqlSession =
-                     com.baomidou.mybatisplus.extension.toolkit.SqlHelper.sqlSession(targetClass)) {
-            com.baomidou.mybatisplus.core.mapper.BaseMapper<? extends BaseEntity> mapper =
-                    com.baomidou.mybatisplus.extension.toolkit.SqlHelper.getMapper(targetClass, sqlSession);
-            return mapper.selectBatchIds(ids);   // selectBatchIds 由 MyBatis-Plus 直接提供
-        }
-    }
-}
+```bash
+mvn -pl easy-trans-demo-aot -Pnative package      # 产物 ./target/easy-trans-demo-aot
+mvn -pl easy-trans-demo-webflux -Pnative package
+mvn -pl easy-trans-demo-actuator -Pnative package
 ```
 
-> 若项目使用原生 MyBatis（无 MyBatis-Plus），可改为按实体类维护一个 `实体 → Mapper` 的注册表，再 `sqlSessionTemplate.getMapper(...)` 取得 Mapper 并调用手写 `selectBatchIds`；`DbTransRepository` 的逻辑保持不变。
+## 参与贡献
 
-### 5、JPA 驱动实现
+欢迎 Issue 与 Pull Request：
 
-用 `EntityManager` 按实体类动态构建查询即可：
+- **提问题 / 提需求**：在 [Issues](https://github.com/orangewest/easy-trans/issues) 描述场景与复现步骤。
+- **提交代码**：Fork 仓库 → 新建分支 → `mvn clean install` 确保通过 → 发起 PR。
+- **本地构建**：需 JDK 25。根目录构建与测试：
 
-```java
-@Component
-public class JpaTransDriver implements TransDriver {
+  ```bash
+  mvn clean install
+  mvn test
+  ```
 
-    @PersistenceContext
-    private EntityManager em;
+  单模块构建 / 单测试类：
 
-    @Override
-    public List<? extends BaseEntity> findByIds(List<? extends Serializable> ids, Class<? extends BaseEntity> targetClass) {
-        // 实体名用类的简单名（JPA 默认实体名）；id 取自 BaseEntity 继承字段
-        String jpql = "SELECT e FROM " + targetClass.getSimpleName() + " e WHERE e.id IN :ids";
-        return em.createQuery(jpql, targetClass)
-                .setParameter("ids", ids)
-                .getResultList();
-    }
-}
-```
+  ```bash
+  mvn -pl easy-trans-core clean install
+  mvn -pl easy-trans-core test -Dtest=TransServiceTest
+  ```
 
-### 6、Native Image 注意事项
+## 许可证
 
-`DbTransRepo` 是一个「`@TransRepo` 元注解」的自定义注解，`easy-trans-spring-start` 内置的 `EasyTransRuntimeHints` 会在 AOT 阶段**自动识别**它（递归扫描元注解），并为其注册反射元数据，因此 native 构建无需手写 `reflect-config`。只要你的 `@DbTransRepo` 沿用 `@TransRepo` 元注解、`entity()` 等属性声明在注解自身，就能被自动覆盖。
-
-<!--links-->
-
-[your-project-path]:orangewest/easy-trans
-
-[contributors-shield]:https://img.shields.io/github/contributors/orangewest/easy-trans.svg?style=flat-square
-
-[contributors-url]: https://github.com/orangewest/easy-trans/graphs/contributors
-
-[forks-shield]: https://img.shields.io/github/forks/orangewest/easy-trans.svg?style=flat-square
-
-[forks-url]: https://github.com/orangewest/easy-trans/network/members
-
-[stars-shield]: https://img.shields.io/github/stars/orangewest/easy-trans.svg?style=flat-square
-
-[stars-url]: https://github.com/orangewest/easy-trans/stargazers
-
-[issues-shield]: https://img.shields.io/github/issues/orangewest/easy-trans.svg?style=flat-square
-
-[issues-url]: https://img.shields.io/github/issues/orangewest/easy-trans.svg
-
-[license-shield]: https://img.shields.io/github/license/orangewest/easy-trans.svg?style=flat-square
-
-[license-url]: https://github.com/orangewest/easy-trans/blob/master/LICENSE.txt
-
+[Apache 2.0](LICENSE) © orangewest

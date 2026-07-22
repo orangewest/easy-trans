@@ -71,9 +71,8 @@ class TransCustomMetaMatrixTest {
         TransService service = new TransService();
         NestedCustomDto dto = new NestedCustomDto(7L);
 
-        boolean result = service.trans(dto);
+        service.trans(dto);
 
-        assertTrue(result);
         assertEquals(2L, dto.cityId);             // areaId=7 -> 长沙县.pid=2
         assertEquals("长沙市", dto.cityName);        // cityId=2 -> 长沙市.name
         assertEquals(1L, dto.provinceId);          // cityId=2 -> 长沙市.pid=1

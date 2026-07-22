@@ -24,8 +24,7 @@ public class CollectionUtils {
 
     public static List<Object> objToList(Object obj) {
         List<Object> objList;
-        if (obj instanceof Iterable<?>) {
-            Iterable<?> iterable = (Iterable<?>) obj;
+        if (obj instanceof Iterable<?> iterable) {
             objList = StreamSupport.stream(iterable.spliterator(), false).collect(Collectors.toList());
         } else if (obj.getClass().isArray()) {
             objList = Arrays.stream((Object[]) obj).collect(Collectors.toList());
