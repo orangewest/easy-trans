@@ -53,6 +53,9 @@
         <maven-source-plugin.version>3.3.1</maven-source-plugin.version>
         <maven-javadoc-plugin.version>3.11.2</maven-javadoc-plugin.version>
         <maven-gpg-plugin.version>3.2.7</maven-gpg-plugin.version>
+        <maven-surefire-plugin.version>3.5.2</maven-surefire-plugin.version>
+        <maven-dependency-plugin.version>3.8.1</maven-dependency-plugin.version>
+        <byte-buddy.version>1.18.10</byte-buddy.version>
     </properties>
 
     <dependencyManagement>
@@ -82,6 +85,17 @@
         </dependencies>
     </dependencyManagement>
 
+    <!-- 测试期静态挂载 ByteBuddy agent：Mockito 的 inline mock maker 会复用已安装的 agent，
+         不再于运行时动态 self-attach，从而消除 JDK 21+ 的
+         "Mockito is currently self-attaching ... Dynamic loading of agents will be disallowed" 警告。 -->
+    <dependencies>
+        <dependency>
+            <groupId>net.bytebuddy</groupId>
+            <artifactId>byte-buddy-agent</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
     <build>
         <pluginManagement>
             <plugins>
@@ -109,6 +123,16 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-gpg-plugin</artifactId>
                     <version>${maven-gpg-plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>${maven-surefire-plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-dependency-plugin</artifactId>
+                    <version>${maven-dependency-plugin.version}</version>
                 </plugin>
             </plugins>
         </pluginManagement>
@@ -168,24 +192,38 @@
                     </execution>
                 </executions>
             </plugin>
-            <!-- JPMS module-path test support: allow test code to read JUnit modules
-                 and open test packages for reflection. Maven Surefire runs tests on
-                 classpath by default; these flags are for IDE module-path mode. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
-                    <argLine>
-                        --add-reads io.github.orangewest.trans=org.junit.jupiter.api
-                        --add-opens io.github.orangewest.trans/io.github.orangewest.trans.service=org.junit.platform.commons
-                        --add-opens io.github.orangewest.trans/io.github.orangewest.trans.core=org.junit.platform.commons
-                        --add-opens io.github.orangewest.trans/io.github.orangewest.trans.manager=org.junit.platform.commons
-                        --add-opens io.github.orangewest.trans/io.github.orangewest.trans.metrics=org.junit.platform.commons
-                        --add-opens io.github.orangewest.trans/io.github.orangewest.trans.resolver=org.junit.platform.commons
-                        --add-opens io.github.orangewest.trans/io.github.orangewest.trans.repository.enumdict=org.junit.platform.commons
-                        --add-opens io.github.orangewest.trans/io.github.orangewest.trans.util=org.junit.platform.commons
-                    </argLine>
+                    <argLine>-javaagent:${project.build.directory}/byte-buddy-agent.jar</argLine>
                 </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>copy-bytebuddy-agent</id>
+                        <phase>process-test-classes</phase>
+                        <goals>
+                            <goal>copy</goal>
+                        </goals>
+                        <configuration>
+                            <artifactItems>
+                                <artifactItem>
+                                    <groupId>net.bytebuddy</groupId>
+                                    <artifactId>byte-buddy-agent</artifactId>
+                                    <version>${byte-buddy.version}</version>
+                                    <type>jar</type>
+                                    <outputDirectory>${project.build.directory}</outputDirectory>
+                                    <destFileName>byte-buddy-agent.jar</destFileName>
+                                </artifactItem>
+                            </artifactItems>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
 
         </plugins>

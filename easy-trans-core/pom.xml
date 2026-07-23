@@ -13,10 +13,13 @@
     <name>easy-trans-core</name>
 
     <dependencies>
+        <!-- provided: visible only at compile/test time, not packaged, so core stays zero runtime dependency.
+             Also makes the main module (module-info uses "requires static org.junit.jupiter.api") resolvable
+             at module-path compile time, so IDE single-test runs on the module path need no extra JVM flags. -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
-            <scope>test</scope>
+            <scope>provided</scope>
         </dependency>
     </dependencies>
 
