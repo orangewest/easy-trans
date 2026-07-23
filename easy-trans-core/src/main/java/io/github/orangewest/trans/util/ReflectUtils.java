@@ -14,20 +14,31 @@ import java.util.Optional;
 public class ReflectUtils {
 
     public static final Map<Class<?>, Class<?>> PRIMITIVE_WRAPPER_MAP = new ConcurrentHashMap<>(8);
-
     /**
-     * key 字段懒缓存的复合键：运行期类 + 要提取的 key 字段名。
-     * 同一 {@code R} 类型可能被多个目标字段以不同 {@code key} 提取（如 {@code CityEntity} 同时被取 {@code name}/{@code pid}），
-     * 故缓存键须同时含 key 名，否则会串味（见 ADR-0003）。
+     * Cache key: runtime class + field name to extract.
+     * Same {@code R} type may be extracted by multiple target fields with different {@code key}
+     * (e.g. {@code CityEntity} for both {@code name} and {@code pid}), so cache key must include key name.
      */
     private record KeyField(Class<?> clazz, String key) {
     }
+    /**
+     * Field accessor: getter-first to support Hibernate lazy-loading proxies (getter triggers init),
+     * field access fallback for plain POJOs.
+     */
+    private record Accessor(Method getter, Field field) {
+        Object read(Object target) throws ReflectiveOperationException {
+            if (getter != null) {
+                return getter.invoke(target);
+            }
+            return field.get(target);
+        }
+    }
 
     /**
-     * key 字段懒缓存：复合键 -> 该类的 key 字段（已 setAccessible）。
-     * 值为 {@link Optional} 以兼容「该类无 key 字段」(null) 的缓存，避免 {@code computeIfAbsent} 禁用的 null value。
+     * Lazy cache of key accessors: KeyField -> Optional<Accessor>.
+     * Optional handles "no such key" (null) caching.
      */
-    private static final Map<KeyField, Optional<Field>> KEY_FIELD_CACHE = new ConcurrentHashMap<>();
+    private static final Map<KeyField, Optional<Accessor>> KEY_FIELD_CACHE = new ConcurrentHashMap<>();
 
     static {
         PRIMITIVE_WRAPPER_MAP.put(boolean.class, Boolean.class);
@@ -153,14 +164,14 @@ public class ReflectUtils {
         if (value instanceof Map<?, ?> map) {
             return map.get(key);
         }
-        Field field = KEY_FIELD_CACHE.computeIfAbsent(new KeyField(value.getClass(), key), k -> Optional.ofNullable(findKeyField(k.clazz(), k.key())))
+        Accessor accessor = KEY_FIELD_CACHE.computeIfAbsent(new KeyField(value.getClass(), key), k -> Optional.ofNullable(findAccessor(k.clazz(), k.key())))
                 .orElse(null);
-        if (field == null) {
+        if (accessor == null) {
             return null;
         }
         try {
-            return field.get(value);
-        } catch (IllegalAccessException e) {
+            return accessor.read(value);
+        } catch (ReflectiveOperationException e) {
             return null;
         }
     }
@@ -170,14 +181,28 @@ public class ReflectUtils {
      *
      * @return key 字段；未找到返回 null
      */
-    private static Field findKeyField(Class<?> clazz, String key) {
+    private static Accessor findAccessor(Class<?> clazz, String key) {
+        String capitalized = Character.toUpperCase(key.charAt(0)) + key.substring(1);
+        for (Class<?> c = clazz; c != null && c != Object.class; c = c.getSuperclass()) {
+            try {
+                Method m = c.getDeclaredMethod("get" + capitalized);
+                setAccessible(m);
+                return new Accessor(m, null);
+            } catch (NoSuchMethodException ignored) {
+            }
+            try {
+                Method m = c.getDeclaredMethod("is" + capitalized);
+                setAccessible(m);
+                return new Accessor(m, null);
+            } catch (NoSuchMethodException ignored) {
+            }
+        }
         for (Class<?> c = clazz; c != null && c != Object.class; c = c.getSuperclass()) {
             try {
                 Field f = c.getDeclaredField(key);
                 setAccessible(f);
-                return f;
+                return new Accessor(null, f);
             } catch (NoSuchFieldException ignored) {
-                // 当前类无此字段，继续向上找父类
             }
         }
         return null;

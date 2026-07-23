@@ -22,10 +22,11 @@ public class TransUtil implements ApplicationContextAware {
      * @param result 需要翻译的对象或返回值
      * @return 翻译后的对象（未注入 TransService 时原样返回）
      */
-    public static Object trans(Object result) {
+    @SuppressWarnings("unchecked")
+    public static <T> T trans(T result) {
         TransService service = TransServiceHolder.get();
         if (service != null) {
-            return service.trans(result);
+            return (T) service.trans(result);
         }
         return result;
     }

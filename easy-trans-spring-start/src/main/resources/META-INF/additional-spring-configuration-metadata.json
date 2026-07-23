@@ -1,0 +1,10 @@
+{
+  "properties": [
+    {
+      "name": "easy-trans.parallel-repo-groups",
+      "type": "java.lang.Boolean",
+      "defaultValue": true,
+      "description": "Enable parallel execution when DTO has 2+ repository groups. Set to false if your TransRepository depends on ThreadLocal context (JPA session, SecurityContext, MDC)."
+    }
+  ]
+}
