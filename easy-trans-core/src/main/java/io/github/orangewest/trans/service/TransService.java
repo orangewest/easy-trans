@@ -31,11 +31,21 @@ public class TransService implements AutoCloseable {
 
     private volatile ExecutorService executor;
 
-    /**
-     * 标记默认执行器是否为本类*懒创建*（而非用户经 {@link #setExecutor} 注入）。
-     * 仅此标记为真时 {@link #close()} 才关闭它，避免误关用户托管线程池。
-     */
     private volatile boolean defaultExecutorCreated = false;
+
+    /**
+     * Enable parallel execution when DTO has 2+ repository groups (default {@code true}).
+     * <p>
+     * Parallel mode runs each repo group on a virtual thread via {@link CompletableFuture#runAsync},
+     * which loses the calling thread's {@link ThreadLocal} context — JPA session, Spring Security,
+     * MDC trace-id, etc. If your {@code TransRepository.getTransValueMap} depends on any of these,
+     * set this to {@code false} to keep all groups on the calling thread.
+     */
+    private volatile boolean parallelRepoGroups = true;
+
+    public void setParallelRepoGroups(boolean parallelRepoGroups) {
+        this.parallelRepoGroups = parallelRepoGroups;
+    }
 
     public void setExecutor(ExecutorService executor) {
         ExecutorService previous = this.executor;
@@ -46,10 +56,6 @@ public class TransService implements AutoCloseable {
         this.defaultExecutorCreated = false;
     }
 
-    /**
-     * 懒初始化虚拟线程执行器：未通过 {@link #setExecutor} 显式指定时，
-     * 首次翻译按需创建（每个任务一条虚拟线程）。无需调用方预先 init()。
-     */
     private ExecutorService getExecutor() {
         ExecutorService e = executor;
         if (e == null) {
@@ -66,11 +72,6 @@ public class TransService implements AutoCloseable {
         return e;
     }
 
-    /**
-     * 关闭本类*懒创建*的默认虚拟线程执行器（仅当 {@link #setExecutor} 未被调用时）。
-     * 用户经 {@link #setExecutor} 注入的执行器由调用方自行管理，本方法绝不触碰。
-     * <p>Spring 容器会在关闭时自动推断并调用本方法（bean 实现 {@code AutoCloseable}）。
-     */
     @Override
     public void close() {
         ExecutorService e = executor;
@@ -81,20 +82,16 @@ public class TransService implements AutoCloseable {
         }
     }
 
-    /**
-     * @param obj 需要被翻译的对象或返回值（支持同步对象、{@code Result} 等包装、{@code CompletableFuture}、
-     *            {@code Mono}/{@code Flux} 等——由已注册的 {@link TransValueResolver} 适配）
-     * @return 翻译后的对象（入参原对象，已就地填充翻译字段；obj 为 null 时返回 null）
-     */
-    public Object trans(Object obj) {
+    @SuppressWarnings("unchecked")
+    public <T> T trans(T obj) {
         if (obj == null) {
             return null;
         }
         TransValueResolver adapter = TransValueResolverFactory.firstSupports(obj);
         if (adapter != null) {
-            return adapter.handle(obj, this::trans);
+            return (T) adapter.handle(obj, this::trans);
         }
-        return translateCore(obj);
+        return (T) translateCore(obj);
     }
 
     private Object translateCore(Object obj) {
@@ -106,38 +103,36 @@ public class TransService implements AutoCloseable {
         if (objClass.getName().startsWith("java.")) {
             return obj;
         }
-        TransMetricContext translateContext = TransMetricContext.builder(TransMetricsOperations.TRANSLATE)
+        TransClassMeta info = TransClassMetaCacheManager.getTransClassMeta(objClass);
+        if (!info.needTrans()) {
+            return obj;
+        }
+        TransMetricContext ctx = TransMetricContext.builder(TransMetricsOperations.TRANSLATE)
                 .targetClass(objClass)
-                .depth(0)
                 .build();
-        TransMetrics.Span translateSpan = TransMetricsCollector.get()
-                .startSpan(TransMetricsOperations.TRANSLATE, translateContext);
+        TransMetrics.Span span = TransMetricsCollector.get()
+                .startSpan(TransMetricsOperations.TRANSLATE, ctx);
         try {
-            TransClassMeta info = TransClassMetaCacheManager.getTransClassMeta(objClass);
-            if (!info.needTrans()) {
-                return obj;
-            }
-            doTrans(objList, info.getTransFieldList(), translateSpan, objClass, 0);
+            doTrans(objList, info.getTransFieldList());
             return obj;
         } catch (Throwable t) {
-            translateSpan.recordException(t);
+            span.recordException(t);
             throw t;
         } finally {
-            translateSpan.end();
+            span.end();
         }
     }
 
-    private void doTrans(List<Object> objList, List<TransFieldMeta> transFieldMetaList,
-                         TransMetrics.Span parentSpan, Class<?> targetClass, int parentDepth) {
+    private void doTrans(List<Object> objList, List<TransFieldMeta> transFieldMetaList) {
         Map<TransRepoMeta, List<TransFieldMeta>> listMap = transFieldMetaList.stream().collect(Collectors.groupingBy(TransFieldMeta::getTransRepoMeta));
-        if (listMap.size() > 1) {
+        if (listMap.size() > 1 && parallelRepoGroups) {
             List<Throwable> errors = Collections.synchronizedList(new ArrayList<>());
             CompletableFuture.allOf(
                             listMap.entrySet()
                                     .stream()
                                     .map(entry -> CompletableFuture.runAsync(() -> {
                                         try {
-                                            doTrans(objList, entry.getKey(), entry.getValue(), parentSpan, targetClass, parentDepth);
+                                            doTrans(objList, entry.getKey(), entry.getValue());
                                         } catch (Throwable t) {
                                             errors.add(t);
                                         }
@@ -145,8 +140,6 @@ public class TransService implements AutoCloseable {
                                     .toArray(CompletableFuture[]::new))
                     .join();
             if (!errors.isEmpty()) {
-                // 聚合所有并行仓库分组的失败，而非只抛首个 cause（R8）：
-                // 首个作为 cause，其余挂作 suppressed，便于一次排查多个仓库的归因。
                 Throwable first = errors.getFirst();
                 String message = "Translation failed for " + errors.size() + " repository group(s): "
                         + errors.stream().map(Throwable::getMessage).collect(Collectors.joining(" | "));
@@ -158,93 +151,42 @@ public class TransService implements AutoCloseable {
             }
         } else {
             listMap.forEach((transRepoMeta, transFields) ->
-                    doTrans(objList, transRepoMeta, transFields, parentSpan, targetClass, parentDepth));
+                    doTrans(objList, transRepoMeta, transFields));
         }
     }
 
-    private void doTrans(List<Object> objList, TransRepoMeta transRepoMeta, List<TransFieldMeta> transFields,
-                         TransMetrics.Span parentSpan, Class<?> targetClass, int parentDepth) {
-        // 获取翻译仓库
+    private void doTrans(List<Object> objList, TransRepoMeta transRepoMeta, List<TransFieldMeta> transFields) {
         TransRepository<Object, Object> transRepository = TransRepositoryFactory.getTransRepository(transRepoMeta.getRepository());
         if (transRepository == null) {
             throw new TransException("TransRepository is not registered: "
                     + (transRepoMeta.getRepository() == null ? "null" : transRepoMeta.getRepository().getName())
                     + ". Register it via TransRepositoryFactory.register(...) or mark it as a @Component in Spring.");
         }
-        int repoDepth = parentDepth + 1;
-        TransMetrics.Span repoSpan = startRepoSpan(transRepoMeta, targetClass, parentSpan, repoDepth);
-        try {
-            List<TransModel> needTransList = toNeedTransList(objList, transFields);
-            if (CollectionUtils.isNotEmpty(needTransList)) {
-                Map<Object, Object> transValueMap = transRepository.getTransValueMap(
-                        needTransList.stream().map(TransModel::getMultipleTransVal).flatMap(Collection::stream).distinct().collect(Collectors.toList()),
-                        new DefaultTransContext(transRepoMeta.getRepoName(), transRepoMeta.getAttributes(),
-                                transRepoMeta.getRepoField() != null ? transRepoMeta.getRepoField().getType() : null));
-                if (CollectionUtils.isNotEmpty(transValueMap)) {
-                    Map<TransFieldMeta, List<TransModel>> byField = needTransList.stream()
-                            .collect(Collectors.groupingBy(TransModel::getTransField));
-                    int fieldDepth = repoDepth + 1;
-                    for (TransFieldMeta transField : transFields) {
-                        List<TransModel> fieldModels = byField.get(transField);
-                        if (CollectionUtils.isEmpty(fieldModels)) {
-                            continue;
-                        }
-                        TransMetrics.Span fieldSpan = startFieldSpan(transField, transRepoMeta, targetClass, repoSpan, fieldDepth);
-                        try {
-                            fieldModels.forEach(transModel -> transModel.fillValue(transValueMap));
-                            if (CollectionUtils.isNotEmpty(transField.getChildren())) {
-                                // 嵌套翻译：parent 指向上层 field Span，depth 递增
-                                doTrans(objList, transField.getChildren(), fieldSpan, targetClass, fieldDepth);
-                            }
-                        } catch (Throwable t) {
-                            fieldSpan.recordException(t);
-                            throw t;
-                        } finally {
-                            fieldSpan.end();
-                        }
-                    }
-                }
+        List<TransModel> needTransList = toNeedTransList(objList, transFields);
+        if (CollectionUtils.isEmpty(needTransList)) {
+            return;
+        }
+        Map<Object, Object> transValueMap = transRepository.getTransValueMap(
+                needTransList.stream().map(TransModel::getMultipleTransVal).flatMap(Collection::stream).distinct().collect(Collectors.toList()),
+                new DefaultTransContext(transRepoMeta.getRepoName(), transRepoMeta.getAttributes(),
+                        transRepoMeta.getRepoField() != null ? transRepoMeta.getRepoField().getType() : null));
+        if (CollectionUtils.isEmpty(transValueMap)) {
+            return;
+        }
+        Map<TransFieldMeta, List<TransModel>> byField = needTransList.stream()
+                .collect(Collectors.groupingBy(TransModel::getTransField));
+        for (TransFieldMeta transField : transFields) {
+            List<TransModel> fieldModels = byField.get(transField);
+            if (CollectionUtils.isEmpty(fieldModels)) {
+                continue;
             }
-        } catch (Throwable t) {
-            repoSpan.recordException(t);
-            throw t;
-        } finally {
-            repoSpan.end();
+            fieldModels.forEach(transModel -> transModel.fillValue(transValueMap));
+            if (CollectionUtils.isNotEmpty(transField.getChildren())) {
+                doTrans(objList, transField.getChildren());
+            }
         }
     }
 
-    private TransMetrics.Span startRepoSpan(TransRepoMeta transRepoMeta, Class<?> targetClass,
-                                            TransMetrics.Span parentSpan, int depth) {
-        TransMetricContext context = TransMetricContext.builder(TransMetricsOperations.REPOSITORY)
-                .parent(parentSpan)
-                .depth(depth)
-                .targetClass(targetClass)
-                .repoName(transRepoMeta.getRepoName())
-                .repositoryClass(transRepoMeta.getRepository())
-                .build();
-        return TransMetricsCollector.get().startSpan(TransMetricsOperations.REPOSITORY, context);
-    }
-
-    private TransMetrics.Span startFieldSpan(TransFieldMeta transField, TransRepoMeta transRepoMeta, Class<?> targetClass,
-                                             TransMetrics.Span parentSpan, int depth) {
-        TransMetricContext context = TransMetricContext.builder(TransMetricsOperations.FIELD)
-                .parent(parentSpan)
-                .depth(depth)
-                .targetClass(targetClass)
-                .fieldName(transField.getField().getName())
-                .repoName(transRepoMeta.getRepoName())
-                .repositoryClass(transRepoMeta.getRepository())
-                .build();
-        return TransMetricsCollector.get().startSpan(TransMetricsOperations.FIELD, context);
-    }
-
-    /**
-     * 获取需要翻译的集合
-     *
-     * @param objList     需要被翻译的对象集合
-     * @param toTransList 需要被翻译的属性
-     * @return 需要被翻译的集合Map<trans, List < TransModel>>
-     */
     private List<TransModel> toNeedTransList(List<Object> objList, List<TransFieldMeta> toTransList) {
         return toTransList.stream()
                 .flatMap(x -> objList.stream().map(o -> new TransModel(o, x)))
@@ -253,5 +195,3 @@ public class TransService implements AutoCloseable {
     }
 
 }
-
-

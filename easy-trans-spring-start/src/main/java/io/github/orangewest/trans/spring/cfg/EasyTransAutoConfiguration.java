@@ -16,16 +16,20 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
+@EnableConfigurationProperties(EasyTransProperties.class)
 public class EasyTransAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public TransService transService() {
-        return new TransService();
+    public TransService transService(EasyTransProperties props) {
+        TransService service = new TransService();
+        service.setParallelRepoGroups(props.isParallelRepoGroups());
+        return service;
     }
 
     @Bean

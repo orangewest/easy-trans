@@ -1,5 +1,6 @@
 package io.github.orangewest.trans.util;
 
+import java.lang.reflect.Array;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
@@ -27,7 +28,11 @@ public class CollectionUtils {
         if (obj instanceof Iterable<?> iterable) {
             objList = StreamSupport.stream(iterable.spliterator(), false).collect(Collectors.toList());
         } else if (obj.getClass().isArray()) {
-            objList = Arrays.stream((Object[]) obj).collect(Collectors.toList());
+            int len = Array.getLength(obj);
+            objList = new ArrayList<>(len);
+            for (int i = 0; i < len; i++) {
+                objList.add(Array.get(obj, i));
+            }
         } else {
             objList = Collections.singletonList(obj);
         }
