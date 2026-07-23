@@ -1,6 +1,7 @@
 package io.github.orangewest.trans.core;
 
 import io.github.orangewest.trans.annotation.Trans;
+import io.github.orangewest.trans.annotation.TransNest;
 import io.github.orangewest.trans.annotation.TransRepo;
 import io.github.orangewest.trans.exception.TransException;
 import io.github.orangewest.trans.repository.TransRepository;
@@ -25,12 +26,15 @@ public class TransClassMeta {
 
     private List<TransFieldMeta> transFieldMetaList = new ArrayList<>();
 
+    private List<Field> nestFields = Collections.emptyList();
+
     private final Map<String, TransRepoMeta> transRepoMetaMap = new HashMap<>();
 
     public TransClassMeta(Class<?> clazz) {
         this.clazz = clazz;
         parseTransRepo();
         parseTransField();
+        parseNestFields();
     }
 
     /**
@@ -241,10 +245,32 @@ public class TransClassMeta {
     }
 
     /**
-     * @return 判断是否需要翻译
+     * @return 判断是否需要翻译（含 @TransNest 嵌套字段）
      */
     public boolean needTrans() {
-        return !transFieldMetaList.isEmpty();
+        return !transFieldMetaList.isEmpty() || !nestFields.isEmpty();
+    }
+
+    /**
+     * @return 标记了 {@code @TransNest} 需要级联翻译的字段
+     */
+    public List<Field> getNestFields() {
+        return nestFields;
+    }
+
+    private void parseNestFields() {
+        List<Field> fields = new ArrayList<>();
+        for (Field field : ReflectUtils.getAllField(this.clazz)) {
+            int mod = field.getModifiers();
+            if (Modifier.isStatic(mod) || Modifier.isFinal(mod) || Modifier.isTransient(mod)) {
+                continue;
+            }
+            if (field.isAnnotationPresent(TransNest.class)) {
+                fields.add(field);
+                ReflectUtils.setAccessible(field);
+            }
+        }
+        this.nestFields = Collections.unmodifiableList(fields);
     }
 
 }
