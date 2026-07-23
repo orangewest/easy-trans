@@ -2,6 +2,7 @@ package io.github.orangewest.trans.spring.aot;
 
 import io.github.orangewest.trans.annotation.DictTrans;
 import io.github.orangewest.trans.annotation.Trans;
+import io.github.orangewest.trans.annotation.TransNest;
 import io.github.orangewest.trans.annotation.TransRepo;
 import io.github.orangewest.trans.annotation.TransRepos;
 import io.github.orangewest.trans.annotation.EnumTrans;
@@ -59,7 +60,7 @@ public class EasyTransRuntimeHints implements RuntimeHintsRegistrar {
      * 框架自带的翻译注解（已知类，无需扫描即可注册方法调用 hint）。
      */
     private static final List<Class<?>> KNOWN_TRAN_ANNOTATIONS = Arrays.asList(
-        Trans.class, TransRepo.class, DictTrans.class, TransRepos.class);
+        Trans.class, TransRepo.class, DictTrans.class, TransRepos.class, TransNest.class);
 
     /**
      * 已知翻译注解的 ASM 描述符集合，用于快速判定「字段注解是否直接是翻译注解」。
@@ -190,6 +191,8 @@ public class EasyTransRuntimeHints implements RuntimeHintsRegistrar {
             "L" + TransRepos.class.getName().replace('.', '/') + ";";
     private static final String ENUM_TRANS_DESCRIPTOR =
             "L" + EnumTrans.class.getName().replace('.', '/') + ";";
+    private static final String TRANS_NEST_DESCRIPTOR =
+            "L" + TransNest.class.getName().replace('.', '/') + ";";
 
     /**
      * R6: register reflection hints for the result type {@code R} of every repository that is
@@ -329,6 +332,9 @@ public class EasyTransRuntimeHints implements RuntimeHintsRegistrar {
                         }
                         if (TRANS_REPOS_DESCRIPTOR.equals(desc)) {
                             return new TransReposUsingVisitor(repoUsingDescriptors);
+                        }
+                        if (TRANS_NEST_DESCRIPTOR.equals(desc)) {
+                            return null;
                         }
                         resolveUsingFromMetaAnnotation(desc, classLoader, repoUsingDescriptors);
                         return null;

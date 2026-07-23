@@ -16,22 +16,24 @@ import io.github.orangewest.trans.repository.DefaultTransContext;
 import io.github.orangewest.trans.resolver.TransValueResolver;
 import io.github.orangewest.trans.resolver.TransValueResolverFactory;
 import io.github.orangewest.trans.util.CollectionUtils;
+import io.github.orangewest.trans.util.ReflectUtils;
 
+import java.lang.reflect.Array;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 public class TransService implements AutoCloseable {
 
-    private volatile ExecutorService executor;
-
-    private volatile boolean defaultExecutorCreated = false;
+    private final TransExecutor executor = new TransExecutor();
 
     /**
      * Enable parallel execution when DTO has 2+ repository groups (default {@code true}).
@@ -48,38 +50,12 @@ public class TransService implements AutoCloseable {
     }
 
     public void setExecutor(ExecutorService executor) {
-        ExecutorService previous = this.executor;
-        if (defaultExecutorCreated && previous != null && previous != executor) {
-            previous.close();
-        }
-        this.executor = executor;
-        this.defaultExecutorCreated = false;
-    }
-
-    private ExecutorService getExecutor() {
-        ExecutorService e = executor;
-        if (e == null) {
-            synchronized (this) {
-                e = executor;
-                if (e == null) {
-                    e = Executors.newThreadPerTaskExecutor(
-                            Thread.ofVirtual().name("trans-", 0).factory());
-                    executor = e;
-                    defaultExecutorCreated = true;
-                }
-            }
-        }
-        return e;
+        this.executor.set(executor);
     }
 
     @Override
     public void close() {
-        ExecutorService e = executor;
-        if (defaultExecutorCreated && e != null) {
-            e.close();
-            executor = null;
-            defaultExecutorCreated = false;
-        }
+        executor.close();
     }
 
     @SuppressWarnings("unchecked")
@@ -91,10 +67,11 @@ public class TransService implements AutoCloseable {
         if (adapter != null) {
             return (T) adapter.handle(obj, this::trans);
         }
-        return (T) translateCore(obj);
+        Set<Object> visited = Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+        return (T) translateWithVisited(obj, visited);
     }
 
-    private Object translateCore(Object obj) {
+    private Object translateWithVisited(Object obj, Set<Object> visited) {
         List<Object> objList = CollectionUtils.objToList(obj);
         if (CollectionUtils.isEmpty(objList)) {
             return obj;
@@ -107,13 +84,19 @@ public class TransService implements AutoCloseable {
         if (!info.needTrans()) {
             return obj;
         }
+        visited.addAll(objList);
         TransMetricContext ctx = TransMetricContext.builder(TransMetricsOperations.TRANSLATE)
                 .targetClass(objClass)
                 .build();
         TransMetrics.Span span = TransMetricsCollector.get()
                 .startSpan(TransMetricsOperations.TRANSLATE, ctx);
         try {
-            doTrans(objList, info.getTransFieldList());
+            if (!info.getTransFieldList().isEmpty()) {
+                dispatchRepoGroups(objList, info.getTransFieldList());
+            }
+            if (!info.getNestFields().isEmpty()) {
+                cascadeNested(objList, info.getNestFields(), visited);
+            }
             return obj;
         } catch (Throwable t) {
             span.recordException(t);
@@ -123,20 +106,23 @@ public class TransService implements AutoCloseable {
         }
     }
 
-    private void doTrans(List<Object> objList, List<TransFieldMeta> transFieldMetaList) {
-        Map<TransRepoMeta, List<TransFieldMeta>> listMap = transFieldMetaList.stream().collect(Collectors.groupingBy(TransFieldMeta::getTransRepoMeta));
-        if (listMap.size() > 1 && parallelRepoGroups) {
+    // ---- dispatch ----
+
+    private void dispatchRepoGroups(List<Object> objList, List<TransFieldMeta> transFieldMetaList) {
+        Map<TransRepoMeta, List<TransFieldMeta>> groups = transFieldMetaList.stream()
+                .collect(Collectors.groupingBy(TransFieldMeta::getTransRepoMeta));
+        if (groups.size() > 1 && parallelRepoGroups) {
             List<Throwable> errors = Collections.synchronizedList(new ArrayList<>());
             CompletableFuture.allOf(
-                            listMap.entrySet()
+                            groups.entrySet()
                                     .stream()
                                     .map(entry -> CompletableFuture.runAsync(() -> {
                                         try {
-                                            doTrans(objList, entry.getKey(), entry.getValue());
+                                            translateRepo(objList, entry.getKey(), entry.getValue());
                                         } catch (Throwable t) {
                                             errors.add(t);
                                         }
-                                    }, getExecutor()))
+                                    }, executor.get()))
                                     .toArray(CompletableFuture[]::new))
                     .join();
             if (!errors.isEmpty()) {
@@ -150,12 +136,12 @@ public class TransService implements AutoCloseable {
                 throw aggregated;
             }
         } else {
-            listMap.forEach((transRepoMeta, transFields) ->
-                    doTrans(objList, transRepoMeta, transFields));
+            groups.forEach((repoMeta, transFields) ->
+                    translateRepo(objList, repoMeta, transFields));
         }
     }
 
-    private void doTrans(List<Object> objList, TransRepoMeta transRepoMeta, List<TransFieldMeta> transFields) {
+    private void translateRepo(List<Object> objList, TransRepoMeta transRepoMeta, List<TransFieldMeta> transFields) {
         TransRepository<Object, Object> transRepository = TransRepositoryFactory.getTransRepository(transRepoMeta.getRepository());
         if (transRepository == null) {
             throw new TransException("TransRepository is not registered: "
@@ -182,7 +168,7 @@ public class TransService implements AutoCloseable {
             }
             fieldModels.forEach(transModel -> transModel.fillValue(transValueMap));
             if (CollectionUtils.isNotEmpty(transField.getChildren())) {
-                doTrans(objList, transField.getChildren());
+                dispatchRepoGroups(objList, transField.getChildren());
             }
         }
     }
@@ -192,6 +178,51 @@ public class TransService implements AutoCloseable {
                 .flatMap(x -> objList.stream().map(o -> new TransModel(o, x)))
                 .filter(TransModel::needTrans)
                 .collect(Collectors.toList());
+    }
+
+    // ---- nest cascade ----
+
+    private void cascadeNested(List<Object> objList, List<Field> nestFields, Set<Object> visited) {
+        Map<Class<?>, List<Object>> collected = new LinkedHashMap<>();
+        for (Object parent : objList) {
+            for (Field nestField : nestFields) {
+                collectFromField(parent, nestField, collected, visited);
+            }
+        }
+        for (List<Object> sameType : collected.values()) {
+            translateWithVisited(sameType, visited);
+        }
+    }
+
+    private static void collectFromField(Object parent, Field field, Map<Class<?>, List<Object>> collected, Set<Object> visited) {
+        Object val = ReflectUtils.getFieldValue(parent, field);
+        if (val == null) {
+            return;
+        }
+        if (val instanceof Iterable<?> iterable) {
+            iterable.forEach(item -> addIfTranslatable(item, collected, visited));
+        } else if (val.getClass().isArray()) {
+            int len = Array.getLength(val);
+            for (int i = 0; i < len; i++) {
+                addIfTranslatable(Array.get(val, i), collected, visited);
+            }
+        } else {
+            addIfTranslatable(val, collected, visited);
+        }
+    }
+
+    private static void addIfTranslatable(Object item, Map<Class<?>, List<Object>> collected, Set<Object> visited) {
+        if (item == null) {
+            return;
+        }
+        Class<?> type = item.getClass();
+        if (type.getName().startsWith("java.")) {
+            return;
+        }
+        if (!visited.add(item)) {
+            return;
+        }
+        collected.computeIfAbsent(type, k -> new ArrayList<>()).add(item);
     }
 
 }

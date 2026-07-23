@@ -13,7 +13,7 @@ import java.util.function.Function;
  * </ul>
  * 二者同属「对一个值做适配、返回（可能已翻译的）值」，故归一为单一接口。
  *
- * <p>匹配规则：{@link TransValueResolverFactory#firstSupports(Object)} 按值的类型取第一个 {@link #supports(Class)} 命中的解析器负责处理。
+ * <p>���配规则：{@link TransValueResolverFactory#firstSupports(Object)} 按值的类型取第一个 {@link #supports(Class)} 命中的解析器负责处理。
  * 同步/兜底翻译由 {@code TransService.trans} 在不命中任何解析器时执行，无需单独的 catch-all 解析器。
  */
 public interface TransValueResolver {

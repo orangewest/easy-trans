@@ -41,68 +41,71 @@ public class TransModel {
     }
 
     public void fillValue(Map<Object, Object> transValueMap) {
-        Object objValue;
-        String key = this.transFieldMeta.getKey();
-        boolean isFillAll = transValueMap.values().stream().anyMatch(transValue -> transValue.getClass().isAssignableFrom(this.transFieldMeta.getFieldType()));
-        if (this.isMultiple) {
-            List<Object> multipleTransVal = getMultipleTransVal();
-            objValue = getObjValue(multipleTransVal);
-            if (objValue instanceof Collection) {
-                @SuppressWarnings("unchecked")
-                Collection<Object> objCollection = (Collection<Object>) objValue;
-                if (isFillAll) {
-                    multipleTransVal.forEach(val -> objCollection.add(transValueMap.get(val)));
-                } else {
-                    // 取代 beanToMap：按 R 实际类懒缓存 key 字段，只取 key 一个字段值（ADR-0003）
-                    Map<Object, Object> objValMap = transValueMap.entrySet().stream()
-                            .collect(Collectors.toMap(Map.Entry::getKey, e -> ReflectUtils.readValueByKey(e.getValue(), key)));
-                    multipleTransVal.forEach(val -> {
-                        if (objValMap.containsKey(val)) {
-                            objCollection.add(objValMap.get(val));
-                        }
-                    });
-                }
-            } else if (objValue instanceof Object[] objArray) {
-                if (isFillAll) {
-                    for (int i = 0; i < multipleTransVal.size(); i++) {
-                        objArray[i] = transValueMap.get(multipleTransVal.get(i));
-                    }
-                } else {
-                    Map<Object, Object> objValMap = transValueMap.entrySet().stream()
-                            .collect(Collectors.toMap(Map.Entry::getKey, e -> ReflectUtils.readValueByKey(e.getValue(), key)));
-                    for (int i = 0; i < multipleTransVal.size(); i++) {
-                        Object val = multipleTransVal.get(i);
-                        if (objValMap.containsKey(val)) {
-                            objArray[i] = objValMap.get(val);
-                        }
-                    }
-                }
-            }
-        } else {
-            if (isFillAll) {
-                objValue = transValueMap.get(this.transVal);
-            } else {
-                objValue = ReflectUtils.readValueByKey(transValueMap.get(this.transVal), key);
-            }
-        }
-        if (objValue != null) {
-            ReflectUtils.setFieldValue(this.obj, this.transFieldMeta.getField(), objValue);
+        String key = transFieldMeta.getKey();
+        boolean isFillAll = transValueMap.values().stream()
+                .anyMatch(v -> v.getClass().isAssignableFrom(transFieldMeta.getFieldType()));
+        Object filled = isMultiple
+                ? fillMulti(transValueMap, key, isFillAll)
+                : fillSingle(transValueMap, key, isFillAll);
+        if (filled != null) {
+            ReflectUtils.setFieldValue(obj, transFieldMeta.getField(), filled);
         }
     }
 
-    private Object getObjValue(List<Object> multipleTransVal) {
-        Object objValue = ReflectUtils.getFieldValue(this.obj, this.transFieldMeta.getField());
-        if (objValue == null) {
-            Class<?> type = this.transFieldMeta.getField().getType();
-            if ((List.class).isAssignableFrom(type)) {
-                objValue = new ArrayList<>();
-            } else if ((Set.class).isAssignableFrom(type)) {
-                objValue = new HashSet<>();
-            } else if (type.isArray()) {
-                objValue = Array.newInstance(type.getComponentType(), multipleTransVal.size());
+    private Object fillSingle(Map<Object, Object> map, String key, boolean isFillAll) {
+        Object source = map.get(transVal);
+        return isFillAll ? source : ReflectUtils.readValueByKey(source, key);
+    }
+
+    private Object fillMulti(Map<Object, Object> map, String key, boolean isFillAll) {
+        List<Object> sources = getMultipleTransVal();
+        Object container = getOrCreateContainer(sources);
+        Map<Object, Object> resolved = isFillAll ? map : toKeyMap(map, key);
+        for (Object src : sources) {
+            Object val = resolved.get(src);
+            if (val != null) {
+                addToContainer(container, val);
             }
         }
-        return objValue;
+        return container;
+    }
+
+    private static Map<Object, Object> toKeyMap(Map<Object, Object> map, String key) {
+        return map.entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> ReflectUtils.readValueByKey(e.getValue(), key)));
+    }
+
+    private static void addToContainer(Object container, Object value) {
+        if (container instanceof Collection) {
+            @SuppressWarnings("unchecked")
+            Collection<Object> c = (Collection<Object>) container;
+            c.add(value);
+        } else if (container instanceof Object[] arr) {
+            for (int i = 0; i < arr.length; i++) {
+                if (arr[i] == null) {
+                    arr[i] = value;
+                    break;
+                }
+            }
+        }
+    }
+
+    private Object getOrCreateContainer(List<Object> sources) {
+        Object container = ReflectUtils.getFieldValue(obj, transFieldMeta.getField());
+        if (container != null) {
+            return container;
+        }
+        Class<?> type = transFieldMeta.getField().getType();
+        if ((List.class).isAssignableFrom(type)) {
+            return new ArrayList<>();
+        }
+        if ((Set.class).isAssignableFrom(type)) {
+            return new HashSet<>();
+        }
+        if (type.isArray()) {
+            return Array.newInstance(type.getComponentType(), sources.size());
+        }
+        return new ArrayList<>();
     }
 
     public TransFieldMeta getTransField() {
