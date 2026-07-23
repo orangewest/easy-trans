@@ -17,7 +17,9 @@ public class DefaultTransContext implements TransContext {
 
     public DefaultTransContext(String repoName, Map<String, Object> attributes, Class<?> sourceType) {
         this.repoName = repoName;
-        this.attributes = attributes == null ? Collections.emptyMap() : attributes;
+        // attributes 在解析期构建、跨调用共享（同一 repo 元数据单例），用不可变视图加固，
+        // 防止运行时意外改写导致其他目标字段读到脏属性。
+        this.attributes = attributes == null ? Collections.emptyMap() : Collections.unmodifiableMap(attributes);
         this.sourceType = sourceType;
     }
 

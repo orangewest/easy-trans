@@ -4,12 +4,18 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * {@link TransValueResolver} 的静态注册表（对齐 {@code TransRepositoryFactory} 模式）。
+ * {@link TransValueResolver} static registry (mirrors {@code TransRepositoryFactory} pattern).
  *
- * <p>默认注册 JDK 层的 {@link CompletionStageResolver}；Project Reactor 解析器由 spring-start 在 reactor
- * 位于 classpath 时经 Spring {@code @ConditionalOnClass} 注入并注册，本工厂与 core 引擎均不静态引用 reactor，
- * 保持 GraalVM Native 下纯 MVC 应用不依赖 reactor。用户自定义 {@link TransValueResolver} 经
- * {@code TransValueResolverFactory.register(...)} 或 Spring Bean（{@code EasyTransRegister}）追加。
+ * <p>Registers JDK-layer {@link CompletionStageResolver} by default; Project Reactor
+ * resolvers are injected by spring-start when reactor is on the classpath via a Spring
+ * {@code @ConditionalOnClass} bean. This factory and the core engine never statically
+ * reference reactor, keeping GraalVM Native images free of reactor for plain MVC apps.
+ *
+ * <p>User-defined {@link TransValueResolver}s are added via
+ * {@code TransValueResolverFactory.register(...)} or as Spring beans
+ * ({@code EasyTransRegister}). Resolvers are ordered by {@link TransValueResolver#priority()}
+ * (lower values checked first, matching {@code @Order} semantics); built-in resolvers
+ * use {@code Integer.MAX_VALUE} so user resolvers preempt them by default (0 &lt; MAX_VALUE).
  */
 public final class TransValueResolverFactory {
 
@@ -22,8 +28,27 @@ public final class TransValueResolverFactory {
     private TransValueResolverFactory() {
     }
 
+    /**
+     * Register a resolver with its own {@link TransValueResolver#priority()}.
+     */
     public static void register(TransValueResolver resolver) {
-        RESOLVERS.add(resolver);
+        register(resolver, resolver.priority());
+    }
+
+    /**
+     * Register a resolver with an explicit priority. Higher values are checked
+     * earlier by {@link #firstSupports}. The resolver is inserted at the correct
+     * position to maintain descending priority order.
+     */
+    public static void register(TransValueResolver resolver, int priority) {
+        int insertAt = 0;
+        for (TransValueResolver r : RESOLVERS) {
+            if (r.priority() >= priority) {
+                break;
+            }
+            insertAt++;
+        }
+        RESOLVERS.add(insertAt, resolver);
     }
 
     public static TransValueResolver firstSupports(Object value) {

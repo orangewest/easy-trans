@@ -1,5 +1,6 @@
 package io.github.orangewest.easytrans.demo;
 
+import io.github.orangewest.easytrans.demo.dto.R6Dto;
 import io.github.orangewest.easytrans.demo.dto.UserDto;
 import io.github.orangewest.easytrans.demo.service.UserService;
 import io.github.orangewest.trans.service.TransService;
@@ -39,6 +40,19 @@ public class DemoApplication {
             check("dictSexName", u2.getDictSexName(), "男");
             check("teacher", u2.getTeacher() == null ? null : u2.getTeacher().getName(), "老师1");
             check("teacherName", u2.getTeacherName(), "老师1");
+
+            // 3) R6 verification: result class that is NOT itself a @Trans DTO
+            //    (School.name read reflectively) + @EnumTrans enumClass constants
+            //    (NationEnum.label read reflectively). If the AOT hints added by R6
+            //    are missing, readValueByKey throws InaccessibleObjectException /
+            //    NoSuchFieldException in the closed native world and startup fails.
+            R6Dto r6 = new R6Dto();
+            r6.setSchoolId(7);
+            r6.setNationCode("cn");
+            transService.trans(r6);
+            System.out.println(">>> [R6] " + r6);
+            check("schoolName", r6.getSchoolName(), "School-7");
+            check("nationName", r6.getNationName(), "China");
 
             System.out.println(">>> ALL CHECKS PASSED");
         };

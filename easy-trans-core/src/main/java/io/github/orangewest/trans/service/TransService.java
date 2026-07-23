@@ -27,12 +27,23 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
-public class TransService {
+public class TransService implements AutoCloseable {
 
     private volatile ExecutorService executor;
 
+    /**
+     * 标记默认执行器是否为本类*懒创建*（而非用户经 {@link #setExecutor} 注入）。
+     * 仅此标记为真时 {@link #close()} 才关闭它，避免误关用户托管线程池。
+     */
+    private volatile boolean defaultExecutorCreated = false;
+
     public void setExecutor(ExecutorService executor) {
+        ExecutorService previous = this.executor;
+        if (defaultExecutorCreated && previous != null && previous != executor) {
+            previous.close();
+        }
         this.executor = executor;
+        this.defaultExecutorCreated = false;
     }
 
     /**
@@ -48,10 +59,26 @@ public class TransService {
                     e = Executors.newThreadPerTaskExecutor(
                             Thread.ofVirtual().name("trans-", 0).factory());
                     executor = e;
+                    defaultExecutorCreated = true;
                 }
             }
         }
         return e;
+    }
+
+    /**
+     * 关闭本类*懒创建*的默认虚拟线程执行器（仅当 {@link #setExecutor} 未被调用时）。
+     * 用户经 {@link #setExecutor} 注入的执行器由调用方自行管理，本方法绝不触碰。
+     * <p>Spring 容器会在关闭时自动推断并调用本方法（bean 实现 {@code AutoCloseable}）。
+     */
+    @Override
+    public void close() {
+        ExecutorService e = executor;
+        if (defaultExecutorCreated && e != null) {
+            e.close();
+            executor = null;
+            defaultExecutorCreated = false;
+        }
     }
 
     /**
@@ -118,8 +145,16 @@ public class TransService {
                                     .toArray(CompletableFuture[]::new))
                     .join();
             if (!errors.isEmpty()) {
-                Throwable cause = errors.getFirst();
-                throw new TransException("Translation failed: " + cause.getMessage(), cause);
+                // 聚合所有并行仓库分组的失败，而非只抛首个 cause（R8）：
+                // 首个作为 cause，其余挂作 suppressed，便于一次排查多个仓库的归因。
+                Throwable first = errors.getFirst();
+                String message = "Translation failed for " + errors.size() + " repository group(s): "
+                        + errors.stream().map(Throwable::getMessage).collect(Collectors.joining(" | "));
+                TransException aggregated = new TransException(message, first);
+                for (int i = 1; i < errors.size(); i++) {
+                    aggregated.addSuppressed(errors.get(i));
+                }
+                throw aggregated;
             }
         } else {
             listMap.forEach((transRepoMeta, transFields) ->

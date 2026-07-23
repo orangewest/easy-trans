@@ -1,6 +1,7 @@
 package io.github.orangewest.trans.spring.aot;
 
 import io.github.orangewest.trans.annotation.DictTrans;
+import io.github.orangewest.trans.annotation.EnumTrans;
 import io.github.orangewest.trans.annotation.Trans;
 import io.github.orangewest.trans.annotation.TransRepo;
 import io.github.orangewest.trans.annotation.TransRepos;
@@ -76,6 +77,12 @@ class EasyTransRuntimeHintsTest {
         //    ReflectUtils.extractAnnotationAttributes 在解析期反射调用其自有属性（如 group()），
         //    缺少该 hint 会在 Native Image 下抛 InaccessibleObjectException。
         assertAnnotationMethodAccess(registered, MyTransField.class);
+
+        // 6. R6: repository result type (readValueByKey reflects on its key field at runtime) needs field hint
+        assertDtoFieldAccess(registered, ResultBean.class);
+
+        // 7. R6: @EnumTrans enumClass() enum constants (readValueByKey reads their label field) need field hint
+        assertDtoFieldAccess(registered, SexEnum.class);
 
     }
 
@@ -211,6 +218,49 @@ class EasyTransRuntimeHintsTest {
         private String sexRepo;
 
         @MyTransField(group = "sex")
+        private String sexName;
+    }
+
+    /** R6 sample: repository result type is not Object, so it must be hinted (readValueByKey reflects on its key field). */
+    static class ResultRepo implements TransRepository<String, ResultBean> {
+        @Override
+        public java.util.Map<String, ResultBean> getTransValueMap(List<String> values,
+                                                                   TransContext context) {
+            return java.util.Collections.emptyMap();
+        }
+    }
+
+    static class ResultBean {
+        private String name;
+        private Integer code;
+    }
+
+    static class ResultDto {
+        @TransRepo(using = ResultRepo.class)
+        private String repo;
+
+        @Trans(trans = "repo", key = "name")
+        private String name;
+    }
+
+    /** R6 sample: @EnumTrans with explicit enumClass; enum constants are reflected on by readValueByKey (label field). */
+    enum SexEnum {
+        MALE("male", "Male"),
+        FEMALE("female", "Female");
+
+        public final String code;
+        public final String label;
+
+        SexEnum(String code, String label) {
+            this.code = code;
+            this.label = label;
+        }
+    }
+
+    static class EnumDto {
+        private Integer sexCode;
+
+        @EnumTrans(trans = "sexCode", enumClass = SexEnum.class, code = "code")
         private String sexName;
     }
 

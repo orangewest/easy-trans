@@ -4,6 +4,8 @@ import io.github.orangewest.trans.annotation.DictTrans;
 import io.github.orangewest.trans.annotation.Trans;
 import io.github.orangewest.trans.annotation.TransRepo;
 import io.github.orangewest.trans.annotation.TransRepos;
+import io.github.orangewest.trans.annotation.EnumTrans;
+import io.github.orangewest.trans.repository.TransRepository;
 import org.jspecify.annotations.NonNull;
 import org.springframework.aot.hint.MemberCategory;
 import org.springframework.aot.hint.RuntimeHints;
@@ -13,9 +15,11 @@ import org.springframework.asm.ClassReader;
 import org.springframework.asm.ClassVisitor;
 import org.springframework.asm.FieldVisitor;
 import org.springframework.asm.Opcodes;
+import org.springframework.asm.Type;
 import org.springframework.beans.factory.annotation.AnnotatedBeanDefinition;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
+import org.springframework.core.ResolvableType;
 import org.springframework.util.ClassUtils;
 
 import java.io.InputStream;
@@ -82,7 +86,9 @@ public class EasyTransRuntimeHints implements RuntimeHintsRegistrar {
 
         // 2. 扫描类路径，定位「字段级标注了翻译注解」的 DTO，并收集自定义元注解。
         Set<String> customAnnoDescriptors = Collections.newSetFromMap(new ConcurrentHashMap<>());
-        ClassPathScanningCandidateComponentProvider scanner = getClassPathScanningCandidateComponentProvider(cl, customAnnoDescriptors);
+        Set<String> repoUsingDescriptors = Collections.newSetFromMap(new ConcurrentHashMap<>());
+        ClassPathScanningCandidateComponentProvider scanner =
+                getClassPathScanningCandidateComponentProvider(cl, customAnnoDescriptors, repoUsingDescriptors);
 
         for (String basePackage : resolveBasePackages()) {
             for (BeanDefinition definition : scanner.findCandidateComponents(basePackage)) {
@@ -100,6 +106,10 @@ public class EasyTransRuntimeHints implements RuntimeHintsRegistrar {
 
         // 3. 自定义元注解（用户自定义的、本身被 @TransRepo 元标注的注解）需要方法调用 hint：
         //    TransClassMeta.parseTransRepoMetas 通过 ReflectUtils.invokeAnnotation 反射调用其 name() 等方法。
+        // 4. R6: register reflection hints for repository result types (readValueByKey reads
+        //    the key field from the TransRepository<R> result object at runtime).
+        registerResultClassHints(hints, cl, repoUsingDescriptors);
+
         for (String descriptor : customAnnoDescriptors) {
             try {
                 String className = descriptor.substring(1, descriptor.length() - 1).replace('/', '.');
@@ -113,7 +123,8 @@ public class EasyTransRuntimeHints implements RuntimeHintsRegistrar {
         }
     }
 
-    private static @NonNull ClassPathScanningCandidateComponentProvider getClassPathScanningCandidateComponentProvider(ClassLoader cl, Set<String> customAnnoDescriptors) {
+    private static @NonNull ClassPathScanningCandidateComponentProvider getClassPathScanningCandidateComponentProvider(
+            ClassLoader cl, Set<String> customAnnoDescriptors, Set<String> repoUsingDescriptors) {
         Map<String, Boolean> metaCache = new ConcurrentHashMap<>();
 
         ClassPathScanningCandidateComponentProvider scanner =
@@ -128,7 +139,7 @@ public class EasyTransRuntimeHints implements RuntimeHintsRegistrar {
         scanner.addIncludeFilter((reader, _) -> {
             try (InputStream is = reader.getResource().getInputStream()) {
                 FieldAnnotationDetector detector =
-                    new FieldAnnotationDetector(cl, customAnnoDescriptors, metaCache);
+                    new FieldAnnotationDetector(cl, customAnnoDescriptors, repoUsingDescriptors, metaCache);
                 new ClassReader(is).accept(detector,
                     ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
                 return detector.found();
@@ -171,18 +182,133 @@ public class EasyTransRuntimeHints implements RuntimeHintsRegistrar {
      * 用 ASM 判断一个类是否有任意字段标注了翻译注解（含自定义元注解），
      * 并把发现的自定义元注解描述符记入 {@code customAnnoDescriptors}。
      */
+    private static final String TRANS_REPO_DESCRIPTOR =
+            "L" + TransRepo.class.getName().replace('.', '/') + ";";
+    private static final String TRANS_DESCRIPTOR =
+            "L" + Trans.class.getName().replace('.', '/') + ";";
+    private static final String TRANS_REPOS_DESCRIPTOR =
+            "L" + TransRepos.class.getName().replace('.', '/') + ";";
+    private static final String ENUM_TRANS_DESCRIPTOR =
+            "L" + EnumTrans.class.getName().replace('.', '/') + ";";
+
+    /**
+     * R6: register reflection hints for the result type {@code R} of every repository that is
+     * explicitly referenced via {@code using} (on @Trans / @TransRepo / a custom @TransRepo
+     * meta-annotation) or via @EnumTrans's {@code enumClass()}. At runtime
+     * {@code ReflectUtils.readValueByKey} reflectively reads the {@code key} field from the
+     * result object, traversing superclasses, so Native Image's closed world needs these
+     * declared-field hints. Repositories resolved only by name (instance registered at runtime)
+     * cannot be discovered statically and must be hinted manually by the user.
+     */
+    private void registerResultClassHints(RuntimeHints hints, ClassLoader cl, Set<String> repoUsingDescriptors) {
+        for (String descriptor : repoUsingDescriptors) {
+            try {
+                String className = descriptor.substring(1, descriptor.length() - 1).replace('/', '.');
+                Class<?> repoClass = ClassUtils.forName(className, cl);
+                if (repoClass == Void.class) {
+                    continue;
+                }
+                if (TransRepository.class.isAssignableFrom(repoClass)) {
+                    Class<?> resultType = ResolvableType.forClass(repoClass)
+                            .as(TransRepository.class).resolveGeneric(1);
+                    if (resultType == null || resultType == Object.class
+                            || resultType.getName().startsWith("java.")
+                            || resultType.getName().startsWith("javax.")) {
+                        // type erasure / type variable / JDK class: cannot or need not be hinted
+                        continue;
+                    }
+                    registerDtoHints(hints, resultType);
+                } else {
+                    // directly supplied class (e.g. @EnumTrans enumClass()): register its own fields
+                    if (repoClass.getName().startsWith("java.")
+                            || repoClass.getName().startsWith("javax.")) {
+                        continue;
+                    }
+                    registerDtoHints(hints, repoClass);
+                }
+            } catch (Throwable ex) {
+                // repo class only present in a specific environment, or generics not resolvable
+            }
+        }
+    }
+
+    private static void resolveUsingFromMetaAnnotation(String descriptor, ClassLoader cl,
+                                                     Set<String> repoUsingDescriptors) {
+        try {
+            String className = descriptor.substring(1, descriptor.length() - 1).replace('/', '.');
+            Class<?> annoClass = ClassUtils.forName(className, cl);
+            if (!annoClass.isAnnotation()) {
+                return;
+            }
+            TransRepo transRepo = annoClass.getAnnotation(TransRepo.class);
+            if (transRepo != null) {
+                addRepoUsing(transRepo.using(), repoUsingDescriptors);
+                return;
+            }
+            Trans trans = annoClass.getAnnotation(Trans.class);
+            if (trans != null && trans.using() != Trans.None.class) {
+                addRepoUsing(trans.using(), repoUsingDescriptors);
+            }
+        } catch (Throwable ex) {
+            // meta-annotation class could not be loaded/parsed: ignore
+        }
+    }
+
+    private static void addRepoUsing(Class<?> repoClass, Set<String> repoUsingDescriptors) {
+        repoUsingDescriptors.add("L" + repoClass.getName().replace('.', '/') + ";");
+    }
+
+    private static final class UsingCapturingVisitor extends AnnotationVisitor {
+        private final Set<String> repoUsingDescriptors;
+        UsingCapturingVisitor(Set<String> repoUsingDescriptors) {
+            super(Opcodes.ASM9);
+            this.repoUsingDescriptors = repoUsingDescriptors;
+        }
+        @Override
+        public void visit(String name, Object value) {
+            if (("using".equals(name) || "enumClass".equals(name)) && value instanceof Type t) {
+                repoUsingDescriptors.add(t.getDescriptor());
+            }
+        }
+    }
+
+    private static final class TransReposUsingVisitor extends AnnotationVisitor {
+        private final Set<String> repoUsingDescriptors;
+        TransReposUsingVisitor(Set<String> repoUsingDescriptors) {
+            super(Opcodes.ASM9);
+            this.repoUsingDescriptors = repoUsingDescriptors;
+        }
+        @Override
+        public AnnotationVisitor visitArray(String name) {
+            if ("value".equals(name)) {
+                return new AnnotationVisitor(Opcodes.ASM9) {
+                    @Override
+                    public AnnotationVisitor visitAnnotation(String n, String desc) {
+                        if (TRANS_REPO_DESCRIPTOR.equals(desc)) {
+                            return new UsingCapturingVisitor(repoUsingDescriptors);
+                        }
+                        return null;
+                    }
+                };
+            }
+            return null;
+        }
+    }
+
     private static final class FieldAnnotationDetector extends ClassVisitor {
 
         private final ClassLoader classLoader;
         private final Set<String> customAnnoDescriptors;
         private final Map<String, Boolean> metaCache;
+        private final Set<String> repoUsingDescriptors;
         private boolean found = false;
 
         FieldAnnotationDetector(ClassLoader classLoader, Set<String> customAnnoDescriptors,
-                                Map<String, Boolean> metaCache) {
+                                Set<String> repoUsingDescriptors, Map<String, Boolean> metaCache) {
             super(Opcodes.ASM9);
             this.classLoader = classLoader;
             this.customAnnoDescriptors = customAnnoDescriptors;
+            this.repoUsingDescriptors = repoUsingDescriptors;
             this.metaCache = metaCache;
         }
 
@@ -198,9 +324,22 @@ public class EasyTransRuntimeHints implements RuntimeHintsRegistrar {
                 public AnnotationVisitor visitAnnotation(String desc, boolean visible) {
                     if (KNOWN_TRAN_ANNO_DESCRIPTORS.contains(desc)) {
                         found = true;
+                        if (TRANS_REPO_DESCRIPTOR.equals(desc) || TRANS_DESCRIPTOR.equals(desc)) {
+                            return new UsingCapturingVisitor(repoUsingDescriptors);
+                        }
+                        if (TRANS_REPOS_DESCRIPTOR.equals(desc)) {
+                            return new TransReposUsingVisitor(repoUsingDescriptors);
+                        }
+                        resolveUsingFromMetaAnnotation(desc, classLoader, repoUsingDescriptors);
+                        return null;
                     } else if (isTransMetaAnnotation(desc, new HashSet<>())) {
                         found = true;
                         customAnnoDescriptors.add(desc);
+                        resolveUsingFromMetaAnnotation(desc, classLoader, repoUsingDescriptors);
+                        if (ENUM_TRANS_DESCRIPTOR.equals(desc)) {
+                            return new UsingCapturingVisitor(repoUsingDescriptors);
+                        }
+                        return null;
                     }
                     return null;
                 }
