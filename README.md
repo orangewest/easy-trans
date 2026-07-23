@@ -172,6 +172,11 @@ new TransService().trans(user);
 
 **Spring 环境**：把仓库标 `@Component` 即可被自动注册，详见[与 Spring Boot 集成](#与-spring-boot-集成)。
 
+
+**Executor lifecycle**: default executor is a virtual-thread pool, lazily created on first translation.
+- Before app exit, call `TransService.close()` to shut down the default executor (non-Spring environment).
+- In Spring, `TransService` implements `DisposableBean`; the container auto-closes the default executor on shutdown.
+- Custom executor: in non-Spring, use `TransService.setExecutor(myExecutor)`; in Spring, register a custom `Executor` bean via `@ConditionalOnMissingBean` to override the default.
 ## 核心设计
 
 翻译过程可拆为四步：
@@ -296,6 +301,8 @@ private List<Long> teacherIds;
 private List<String> teacherNames;  // ["老师1", "老师2"]
 ```
 
+
+**Source/target decoupling**: translation happens per-target-field independently. Multiple targets on the same source (e.g. one extracting name, another id) each translate independently. Source and target collection dimensions need not match.
 ### 嵌套翻译
 
 框架按字段引用关系自动构建翻译树，支持多层级联。下例中 `areaId -> cityId -> provinceId` 形成链路：
@@ -541,6 +548,13 @@ MyBatis-Plus（基于 `BaseMapper.selectBatchIds`）与 JPA（基于 `EntityMana
 
 可通过系统属性 `easy-trans.aot.base-packages` 收敛扫描范围，减少 AOT 扫描开销。
 
+
+**Result-type auto hints (2.0.0+)**: `readValueByKey` reflectively reads fields from repository result objects (e.g. an entity key field, or an `@EnumTrans` enum constant label field). During AOT, `EasyTransRuntimeHints` (R6) auto-registers `ACCESS_DECLARED_FIELDS` hints for these types:
+- Repository result types: via `@TransRepo(using = ...)` or `@Trans(using = ...)`, the `TransRepository` subclass generic `R` (JPA entities, custom value objects) is auto-hinted.
+- `@EnumTrans(enumClass = ...)` enum classes are auto-hinted (`label` / `code` public fields).
+- Repos registered by name at runtime (not via `using`) cannot be discovered statically; users must add manual hints for those.
+
+**Narrowing the scan**: set the JVM system property `-Deasy-trans.aot.base-packages=com.foo,com.bar` to restrict AOT scan to specific package prefixes (comma-separated), reducing build-time overhead for large projects. Full classpath scan otherwise.
 ## 模块说明
 
 | 模块 | 职责 |

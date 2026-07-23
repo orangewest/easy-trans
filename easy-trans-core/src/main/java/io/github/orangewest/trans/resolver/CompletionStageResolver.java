@@ -18,4 +18,9 @@ public class CompletionStageResolver implements TransValueResolver {
     public Object handle(Object value, Function<Object, Object> translator) {
         return ((CompletionStage<?>) value).thenApply(translator);
     }
+
+    @Override
+    public int priority() {
+        return Integer.MAX_VALUE;
+    }
 }

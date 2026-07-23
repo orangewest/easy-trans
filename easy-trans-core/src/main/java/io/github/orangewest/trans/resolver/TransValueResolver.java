@@ -31,4 +31,14 @@ public interface TransValueResolver {
      * @return 处理后的对象（同步时为已翻译对象；异步时为包裹了翻译逻辑的对象）
      */
     Object handle(Object value, Function<Object, Object> translator);
+
+    /**
+     * Priority for resolver ordering. Lower values are checked earlier (matching
+     * {@code @Order} / {@code jakarta.annotation.Priority} semantics). Default 0.
+     * Built-in resolvers use {@link Integer#MAX_VALUE} so user resolvers preempt
+     * them without explicit priority configuration (0 &lt; MAX_VALUE).
+     */
+    default int priority() {
+        return 0;
+    }
 }
