@@ -244,12 +244,12 @@ new TransService().trans(user);
 翻译流程一目了然：
 
 ```mermaid
-flowchart LR
-    A["trans(obj)"] --> B["TransValueResolver\n拆包 / 延迟异步值"]
-    B --> C["构建 TransClassMeta\n生成翻译树（无锁缓存）"]
+graph LR
+    A["trans(obj)"] --> B["TransValueResolver<br/>拆包 / 延迟异步值"]
+    B --> C["构建 TransClassMeta<br/>生成翻译树（无锁缓存）"]
     C --> D["按 @TransRepo 分组"]
-    D --> E["虚拟线程并行调用\nTransRepository.getTransValueMap"]
-    E --> F["按 @Trans 回填目标字段\n对象 / 集合 / 嵌套"]
+    D --> E["虚拟线程并行调用<br/>TransRepository.getTransValueMap"]
+    E --> F["按 @Trans 回填目标字段<br/>对象 / 集合 / 嵌套"]
 ```
 
 ## 注解与接口

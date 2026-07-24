@@ -14,6 +14,9 @@ public final class TransMetricsOperations {
     /** 单个翻译仓库查询。 */
     public static final String REPOSITORY = "repository";
 
+    /** 单个目标字段的读取 + 写入。 */
+    public static final String FIELD = "field";
+
     private TransMetricsOperations() {
     }
 }
