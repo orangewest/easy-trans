@@ -188,23 +188,9 @@ public class TransService implements AutoCloseable {
             if (CollectionUtils.isEmpty(fieldModels)) {
                 continue;
             }
-            TransMetricContext fieldCtx = TransMetricContext.builder(TransMetricsOperations.FIELD)
-                    .parent(parent)
-                    .targetClass(objList.getFirst().getClass())
-                    .fieldName(transField.getField().getName())
-                    .repoName(transRepoMeta.getRepoName())
-                    .build();
-            TransMetrics.Span fieldSpan = TransMetricsCollector.get().startSpan(TransMetricsOperations.FIELD, fieldCtx);
-            try {
-                fieldModels.forEach(transModel -> transModel.fillValue(transValueMap));
-                if (CollectionUtils.isNotEmpty(transField.getChildren())) {
-                    dispatchRepoGroups(objList, transField.getChildren(), call, parent);
-                }
-            } catch (Throwable t) {
-                fieldSpan.recordException(t);
-                throw t;
-            } finally {
-                fieldSpan.end();
+            fieldModels.forEach(transModel -> transModel.fillValue(transValueMap));
+            if (CollectionUtils.isNotEmpty(transField.getChildren())) {
+                dispatchRepoGroups(objList, transField.getChildren(), call, parent);
             }
         }
     }

@@ -71,16 +71,9 @@ class TransMetricsMicrometerTest {
         TransMetrics.Span repoSpan = metrics.startSpan(TransMetricsOperations.REPOSITORY, repoCtx);
         repoSpan.end();
 
-        TransMetricContext fieldCtx = TransMetricContext.builder(TransMetricsOperations.FIELD)
-                .repoName("sexRepo").fieldName("sexName").targetClass(String.class).depth(2).build();
-        TransMetrics.Span fieldSpan = metrics.startSpan(TransMetricsOperations.FIELD, fieldCtx);
-        fieldSpan.end();
-
         // 1. Observation 名映射
         assertTrue(handler.recorded.stream().anyMatch(r -> "easytrans.repository".equals(r.context.getName())),
                 "repository 应映射为 easytrans.repository");
-        assertTrue(handler.recorded.stream().anyMatch(r -> "easytrans.field".equals(r.context.getName())),
-                "field 应映射为 easytrans.field");
 
         Recorded repo = handler.recorded.stream()
                 .filter(r -> "easytrans.repository".equals(r.context.getName())).findFirst().orElseThrow();
@@ -90,15 +83,8 @@ class TransMetricsMicrometerTest {
         assertEquals("1", handler.valueOf(repo, "depth"));
         assertEquals("true", handler.valueOf(repo, "success"));
 
-        Recorded field = handler.recorded.stream()
-                .filter(r -> "easytrans.field".equals(r.context.getName())).findFirst().orElseThrow();
-        assertEquals("field", handler.valueOf(field, "operation"));
-        assertEquals("2", handler.valueOf(field, "depth"));
-
-        // 3. 高基数（fieldName / targetClass）默认不进低基数 tag
-        assertFalse(containsKey(field, "fieldName"),
-                "高基数 fieldName 默认不应进低基数 tag");
-        assertFalse(containsKey(field, "targetClass"),
+        // 3. 高基数（targetClass）默认不进低基数 tag
+        assertFalse(containsKey(repo, "targetClass"),
                 "高基数 targetClass 默认不应进低基数 tag");
     }
 
@@ -137,20 +123,20 @@ class TransMetricsMicrometerTest {
         registry.observationConfig().observationHandler(handler);
 
         TransMetricsMicrometer metrics = new TransMetricsMicrometer(registry);
-        TransMetricContext ctx = TransMetricContext.builder(TransMetricsOperations.FIELD)
-                .repoName("sexRepo").fieldName("sexName").targetClass(String.class).depth(2).build();
-        TransMetrics.Span span = metrics.startSpan(TransMetricsOperations.FIELD, ctx);
+        TransMetricContext ctx = TransMetricContext.builder(TransMetricsOperations.REPOSITORY)
+                .repoName("sexRepo").targetClass(String.class).depth(2).build();
+        TransMetrics.Span span = metrics.startSpan(TransMetricsOperations.REPOSITORY, ctx);
         // 经 setAttribute 显式开启高基数维度
         span.setAttribute("fieldName", "sexName");
         span.end();
 
-        Recorded field = handler.recorded.stream()
-                .filter(r -> "easytrans.field".equals(r.context.getName())).findFirst().orElseThrow();
+        Recorded repo = handler.recorded.stream()
+                .filter(r -> "easytrans.repository".equals(r.context.getName())).findFirst().orElseThrow();
         // 高基数维度不应进入低基数 tag
-        assertFalse(containsKey(field, "fieldName"),
+        assertFalse(containsKey(repo, "fieldName"),
                 "经 setAttribute 补充的高基数维度不应进低基数 tag");
         // 应进入高基数 keyValues
-        assertTrue(containsHighCardinalityKey(field, "fieldName"),
+        assertTrue(containsHighCardinalityKey(repo, "fieldName"),
                 "经 setAttribute 补充的高基数维度应进高基数 keyValues");
     }
 

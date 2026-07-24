@@ -17,7 +17,7 @@ import io.micrometer.observation.ObservationRegistry;
  * <p>tag 映射策略（低基数才入 tag，防基数爆炸）：
  * <ul>
  *     <li>low cardinality：{@code operation}、{@code repo}（repoName）、{@code success}（!errored）、{@code depth}</li>
- *     <li>high cardinality（默认不入 tag）：{@code fieldName}、{@code targetClass}、{@code repositoryClass}；
+ *     <li>high cardinality（默认不入 tag）：{@code targetClass}、{@code repositoryClass}；
  *     如需下钻，后端可在 {@link Span#setAttribute(String, String)} 中显式补充</li>
  * </ul>
  */

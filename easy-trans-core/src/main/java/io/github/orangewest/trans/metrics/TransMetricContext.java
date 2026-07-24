@@ -11,7 +11,7 @@ import java.lang.annotation.Annotation;
  *     <li>low cardinality（默认进 tag）：{@code operation}、{@code depth}、{@code parent}（父子链路）、
  *     {@code repoName}（经 Micrometer 映射为 {@code repo}）</li>
  *     <li>high cardinality（默认不进 tag，需经 {@code setAttribute} 或配置开启）：
- *     {@code targetClass}、{@code fieldName}、{@code repositoryClass}、{@code annotation}</li>
+ *     {@code targetClass}、{@code repositoryClass}、{@code annotation}</li>
  * </ul>
  * 实例通过 {@link #builder(String)} 链式构造，构造完成后不可修改（builder 与实例分离）。
  */
@@ -21,7 +21,6 @@ public final class TransMetricContext {
     private final int depth;
     private final TransMetrics.Span parent;
     private final Class<?> targetClass;
-    private final String fieldName;
     private final String repoName;
     private final Class<?> repositoryClass;
     private final Annotation annotation;
@@ -31,7 +30,6 @@ public final class TransMetricContext {
         this.depth = b.depth;
         this.parent = b.parent;
         this.targetClass = b.targetClass;
-        this.fieldName = b.fieldName;
         this.repoName = b.repoName;
         this.repositoryClass = b.repositoryClass;
         this.annotation = b.annotation;
@@ -57,10 +55,6 @@ public final class TransMetricContext {
         return targetClass;
     }
 
-    public String getFieldName() {
-        return fieldName;
-    }
-
     public String getRepoName() {
         return repoName;
     }
@@ -82,7 +76,6 @@ public final class TransMetricContext {
         private int depth;
         private TransMetrics.Span parent;
         private Class<?> targetClass;
-        private String fieldName;
         private String repoName;
         private Class<?> repositoryClass;
         private Annotation annotation;
@@ -103,11 +96,6 @@ public final class TransMetricContext {
 
         public Builder targetClass(Class<?> targetClass) {
             this.targetClass = targetClass;
-            return this;
-        }
-
-        public Builder fieldName(String fieldName) {
-            this.fieldName = fieldName;
             return this;
         }
 

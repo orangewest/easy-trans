@@ -39,24 +39,22 @@ class TransMetricContextTest {
     }
 
     @Test
-    void builder_carries_all_eight_semantic_fields() throws Exception {
+    void builder_carries_seven_semantic_fields() throws Exception {
         MyAnno anno = AnnotatedHolder.class.getDeclaredField("field").getAnnotation(MyAnno.class);
 
-        TransMetricContext ctx = TransMetricContext.builder(TransMetricsOperations.FIELD)
+        TransMetricContext ctx = TransMetricContext.builder(TransMetricsOperations.REPOSITORY)
                 .parent(DUMMY_PARENT)
                 .depth(3)
                 .targetClass(String.class)
-                .fieldName("name")
                 .repoName("repoField")
                 .repositoryClass(Runnable.class)
                 .annotation(anno)
                 .build();
 
-        assertEquals(TransMetricsOperations.FIELD, ctx.getOperation());
+        assertEquals(TransMetricsOperations.REPOSITORY, ctx.getOperation());
         assertEquals(3, ctx.getDepth());
         assertSame(DUMMY_PARENT, ctx.getParent());
         assertEquals(String.class, ctx.getTargetClass());
-        assertEquals("name", ctx.getFieldName());
         assertEquals("repoField", ctx.getRepoName());
         assertEquals(Runnable.class, ctx.getRepositoryClass());
         assertSame(anno, ctx.getAnnotation());
@@ -72,7 +70,6 @@ class TransMetricContextTest {
         assertEquals(0, ctx.getDepth());
         assertNull(ctx.getParent());
         assertNull(ctx.getTargetClass());
-        assertNull(ctx.getFieldName());
         assertNull(ctx.getRepoName());
         assertNull(ctx.getRepositoryClass());
         assertNull(ctx.getAnnotation());

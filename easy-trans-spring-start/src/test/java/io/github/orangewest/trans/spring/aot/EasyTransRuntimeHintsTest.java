@@ -101,13 +101,12 @@ class EasyTransRuntimeHintsTest {
 
         // 1. 自定义后端是普通类，实例化 + 调用无需任何反射 hint
         CustomBackend backend = new CustomBackend();
-        TransMetricContext context = TransMetricContext.builder(TransMetricsOperations.FIELD)
+        TransMetricContext context = TransMetricContext.builder(TransMetricsOperations.REPOSITORY)
                 .targetClass(SimpleDto.class)
                 .repoName("sexRepo")
-                .fieldName("sexName")
                 .depth(2)
                 .build();
-        TransMetrics.Span span = backend.startSpan(TransMetricsOperations.FIELD, context);
+        TransMetrics.Span span = backend.startSpan(TransMetricsOperations.REPOSITORY, context);
         span.end();
         assertTrue(backend.started.get() > 0, "自定义后端应被调用");
         assertEquals(2, context.getDepth());

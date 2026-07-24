@@ -14,7 +14,7 @@ public interface TransMetrics {
      * 开启一段计时（Span）。context 携带语义上下文，可含父 Span 形成链路。
      *
      * @param operation 测量点类型，见 {@link TransMetricsOperations}
-     * @param context   语义上下文（operation / depth / parent / targetClass / fieldName / repoName / repositoryClass / annotation）
+     * @param context   语义上下文（operation / depth / parent / targetClass / repoName / repositoryClass / annotation）
      * @return Span 句柄，调用方负责在 finally 中调用 {@link Span#end()}
      */
     Span startSpan(String operation, TransMetricContext context);
