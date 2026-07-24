@@ -14,12 +14,24 @@
     <name>easy-trans-demo</name>
     <description>easy-trans 各场景集成测试示例聚合模块</description>
 
-    <!-- 聚合模块本身不发布，跳过 source/javadoc/gpg -->
+    <!-- 聚合模块本身不发布，跳过 source/javadoc/gpg 与 central 发布 -->
     <properties>
         <maven.javadoc.skip>true</maven.javadoc.skip>
         <maven.source.skip>true</maven.source.skip>
         <maven.gpg.skip>true</maven.gpg.skip>
     </properties>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.sonatype.central</groupId>
+                <artifactId>central-publishing-maven-plugin</artifactId>
+                <configuration>
+                    <skipPublishing>true</skipPublishing>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 
     <modules>
         <module>easy-trans-demo-aot</module>
