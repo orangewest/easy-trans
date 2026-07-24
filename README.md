@@ -32,6 +32,7 @@
   - [枚举翻译 @EnumTrans](#枚举翻译-enumtrans)
   - [集合与数组翻译](#集合与数组翻译)
   - [嵌套翻译](#嵌套翻译)
+  - [递归嵌套 @TransNest](#递归嵌套-transnest)
   - [包装对象与异步/响应式](#包装对象与异步响应式)
   - [对象直接填充](#对象直接填充)
   - [自定义元注解](#自定义元注解)
@@ -112,15 +113,13 @@ new TransService().trans(user);
 
 - **注解驱动**：翻译关系写在字段上，业务代码零侵入。
 - **数据源可插拔**：数据库、字典、HTTP、缓存均可接入，只需实现 `TransRepository` 一个接口。
-- **并行取数**：同一对象内不同数据源的字段通过虚拟线程并行查询（`CompletableFuture`），批量翻译时吞吐更高。
-- **多级嵌套**：按字段引用关系自动构建翻译树，支持 省 -> 市 -> 县 这类级联翻译，并内置对象图环检测避免死循环。
-- **集合 / 数组翻译**：源或目标为 `List` / `Set` / 数组时，框架按元素批量翻译。
-- **包装对象拆包**：`Result<T>`、`PageData<T>` 等通过 `TransValueResolver` 自动拆到内部业务对象。
+- **并行取数 & 请求级去重**：同一对象内不同数据源并行查询（虚拟线程）；单次 `trans()` 调用内对「同仓库 + 同 repoName + 同注解属性 + 同源字段类型」的查询做请求级去重，减少重复查库。
+- **多级嵌套（两套机制）**：① 同类**级联树**（`省→市→县`，按字段引用关系自动构建，内置环检测）；② `@TransNest` **递归翻译**嵌套对象 / 集合（如 `List<OrderDto>`、子 `AddressDto`），全图一次性批量翻译 + 身份环检测。
+- **集合 / 数组翻译**：源或目标为 `List` / `Set` / 数组时，框架按元素批量翻译，保持顺序。
+- **包装对象 & 异步/响应式**：`Result<T>`、`PageData<T>` 经 `TransValueResolver` 拆包；`CompletableFuture` / `Mono` / `Flux` 延迟到结果就绪后翻译（`easy-trans-core` 不静态引用 Reactor，保持零依赖）。
 - **对象填充**：当目标字段类型与仓库返回类型一致时直接填入整个对象，否则按 `key` 提取属性。
-- **异步 / 响应式**：Spring 集成下 `TransUtil.trans` 会等待 `CompletableFuture` / `Mono` / `Flux` 就绪后再翻译。
-- **可观测**：内置指标埋点，classpath 存在 Micrometer 时自动桥接 Observation，无依赖则零开销。
-- **查询合并**：单次 `trans()` 调用内对相同语义的仓库查询做请求级去重，减少重复查库。
-- **零运行时依赖**：`easy-trans-core` 仅依赖 JDK，可嵌入任意项目。
+- **可观测（通用测量总线）**：`easy-trans-core` 仅定义 `TransMetrics` 抽象接口，不依赖任何监控库；Spring 下自动桥接 Micrometer Observation（Timer + 链路追踪），亦可自定义后端（日志 / OpenTelemetry）。
+- **零运行时依赖**：`easy-trans-core` 仅依赖 JDK，可嵌入任意项目，亦可用于 GraalVM Native Image。
 
 ## 环境要求
 
@@ -241,6 +240,17 @@ new TransService().trans(user);
 | `@TransRepo` | 标注在**源字段**上，把源字段绑定到某个 `TransRepository`；可重复、可用在自定义注解上作为元注解。 |
 | `TransRepository<T, R>` | 唯一需实现的接口，`getTransValueMap` 从任意数据源批量取数。 |
 | `TransValueResolver` | 统一扩展点：拆 `Result`/`Page` 等包装对象，或处理 `CompletionStage`/`Mono`/`Flux` 等异步/响应式返回值（延迟翻译）。 |
+
+翻译流程一目了然：
+
+```mermaid
+flowchart LR
+    A["trans(obj)"] --> B["TransValueResolver\n拆包 / 延迟异步值"]
+    B --> C["构建 TransClassMeta\n生成翻译树（无锁缓存）"]
+    C --> D["按 @TransRepo 分组"]
+    D --> E["虚拟线程并行调用\nTransRepository.getTransValueMap"]
+    E --> F["按 @Trans 回填目标字段\n对象 / 集合 / 嵌套"]
+```
 
 ## 注解与接口
 
@@ -381,6 +391,33 @@ public class CityDto {
 
 链路依赖每一级的 `key` 都能在数据源中找到对应记录。若某级缺失（如 `pid` 指向不存在的 id），该级及后续层级字段保持 `null`——这是数据缺失的正常结果，不是框架缺陷。嵌套翻译内置对象图环检测（基于已访问对象集合），遇到自引用或循环对象图不会死循环。
 
+### 递归嵌套 @TransNest
+
+当 DTO 里嵌着另一个也需要翻译的 DTO（或其 `List` / `Set` / 数组）时，用 `@TransNest` 标记该字段即可。框架会收集整个对象图中**所有同类型的嵌套对象**，一次性批量翻译（保留批量 / 并行的优势），并以**身份（identity）**语义做环检测，遇到自引用或循环对象图不会死循环。
+
+```java
+class UserDto {
+    @TransRepo(using = OrderTransRepository.class)
+    private Long orderId;
+    @Trans(trans = "orderId", key = "statusName")
+    private String orderStatusName;          // UserDto 自身的翻译
+
+    @TransNest
+    private List<OrderDto> orders;           // 每个 OrderDto.statusName 自动被填
+    @TransNest
+    private AddressDto address;              // AddressDto.cityName 自动被填
+}
+
+class OrderDto {
+    @TransRepo(using = StatusTransRepository.class)
+    private Long statusId;
+    @Trans(trans = "statusId", key = "name")
+    private String statusName;
+}
+```
+
+`java.*` 类型、`null` 与基本类型会被自动跳过。`@TransNest` 与上面的「级联翻译树」是**两套独立机制**：前者递归进入**嵌套对象 / 集合字段**（不同类之间），后者在**同类**中按字段引用链构建级联树。两者可叠加使用。
+
 ### 包装对象与异步/响应式
 
 返回值是 `Result<T>`、`PageData<T>` 这类包装类型时，注册 `TransValueResolver` 拆包即可让翻译触达内部业务对象（与异步/响应式返回值的处理是同一个扩展点）：
@@ -399,6 +436,8 @@ public class ResultResolver implements TransValueResolver {
 ```
 
 非 Spring 环境：`TransValueResolverFactory.register(new ResultResolver())`。
+
+**匹配顺序（`priority()`）**：多个解析器按 `priority()` **降序**匹配（数值越大越先尝试）。内置 `CompletionStageResolver` 使用 `Integer.MAX_VALUE` 排在最前，因此自定义解析器（默认 `priority() = 0`）仅在没有内置解析器命中该类型时才会被选用——适合处理框架未内置的包装 / 异步类型。Spring 下按 `@Component` 自动注册，可重写 `priority()` 调整顺序。
 
 **异步 / 响应式**：框架内置 `CompletionStageResolver`；在 Spring 集成下，当 classpath 存在 Reactor 时，`ReactorTransResolver` 会自动注册，使 `Mono` / `Flux` 返回值在 `map` 阶段完成内部翻译。`easy-trans-core` 本身不静态引用 Reactor，保持零依赖。
 
@@ -516,21 +555,71 @@ return TransUtil.trans(bizService.page(query));
 TransUtil.trans(bizDto);
 ```
 
-## 可观测性（Micrometer）
+## 可观测性（指标 & 链路追踪）
 
-`micrometer-core` 在 `easy-trans-spring-start` 中是 **optional** 依赖。当 classpath 存在 Micrometer Observation 且容器中有 `ObservationRegistry` 时，框架自动将翻译指标桥接到 Observation，无需任何代码；否则退化为无指标（零开销）。
+`easy-trans-core` **不依赖任何监控库**，只定义一套**通用测量总线** `TransMetrics`：引擎只负责「按 operation 发出测量点 + 携带语义上下文（`TransMetricContext`）」，具体如何呈现（Timer / Counter / Tracing Span）完全交给后端实现。未接入任何后端时退化为 `NoopTransMetrics`，零开销、无 NPE。
 
-借助 Spring Boot 自动注册的 `TimerObservationHandler`，以下指标以 Timer 形式暴露：
+### 测量点（`TransMetricsOperations`）
 
-| 指标名 | 低基数 Tag | 含义 |
-| --- | --- | --- |
-| `easytrans.translate` | `operation`、`depth`、`success` | 单次 `trans()` 调用耗时（整条链路的根 Span） |
-| `easytrans.repository` | `operation`、`repo`、`depth`、`success` | 单个翻译仓库查询耗时（`repo` 为 `@TransRepo` 字段名或 `@Trans` 源字段名） |
-| `easytrans.field` | `operation`、`repo`、`depth`、`success` | 单个目标字段的读取 + 写入耗时（嵌套于 `repository` Span 之下） |
+引擎在翻译过程中发出两类测量点，并通过 `parent` 指针形成父子调用树——`translate` 为根 Span，`repository` 为其直接子 Span：
 
-三级 Span 自然形成调用树：`translate` -> `repository` -> `field`；嵌套翻译中 `depth` 逐级递推。低基数维度（默认进 tag）防止基数爆炸；高基数维度（`fieldName` / `targetClass` / `repositoryClass`）默认不进 tag，如需下钻可经 `Span#setAttribute` 补充。
+| operation | 含义 |
+| --- | --- |
+| `translate` | 单次 `trans()` 调用总耗时（根 Span） |
+| `repository` | 单个仓库 `getTransValueMap` 查询耗时（`repo` 为 `@TransRepo` 名或 `@Trans` 源字段名） |
 
-如需自定义后端（日志、OpenTelemetry 等），实现 `TransMetrics` 后通过 `TransMetricsCollector.set(...)` 或声明为 Spring Bean 注入即可，`easy-trans-core` 不依赖任何监控库。
+### 语义上下文（`TransMetricContext`）
+
+每个测量点携带结构化的 **low / high cardinality** 维度，从根本上规避高基数爆炸：
+
+- **low cardinality（默认进 tag）**：`operation`、`repo`（`repoName`）、`depth`（嵌套层级）、`success`（是否异常）。
+- **high cardinality（默认不进 tag）**：`targetClass`、`repositoryClass`；如需下钻，后端可在 `Span#setAttribute(key, value)` 中显式补充（按 high-cardinality 处理）。
+
+### Spring 自动桥接 Micrometer
+
+`micrometer-core` 在 `easy-trans-spring-start` 中是 **optional** 依赖。当 classpath 存在 Micrometer Observation 且容器中有 `ObservationRegistry` 时，自动配置把 `TransMetricsMicrometer` 注入 `TransMetricsCollector`，无需任何代码：
+
+- 借助 Spring Boot 的 `TimerObservationHandler`，`translate` / `repository` 自动以 Timer 形式暴露为 `easytrans.translate` / `easytrans.repository`（携带上述低基数 tag）。
+- 若运行环境存在 Tracing 基础设施（如 OpenTelemetry），Observation 天然具备链路追踪能力。
+
+```bash
+# actuator 暴露指标后查看
+GET /actuator/metrics/easytrans.translate
+GET /actuator/metrics/easytrans.repository
+GET /actuator/prometheus
+```
+
+### 自定义后端
+
+实现 `TransMetrics` 后注册即可，core 不依赖任何监控库：
+
+```java
+// 非 Spring：静态注入
+TransMetricsCollector.set(myMetrics);
+
+// Spring：声明为 Bean 即被自动装配（@ConditionalOnMissingBean，可被你的实现覆盖）
+@Bean
+public TransMetrics transMetrics() {
+    return new MyMetrics();
+}
+```
+
+`TransMetrics` 契约：
+
+```java
+public interface TransMetrics {
+    /** 开启一段计时，context 携带 operation + 语义维度；返回 Span 句柄。 */
+    Span startSpan(String operation, TransMetricContext context);
+
+    interface Span {
+        void setAttribute(String key, String value); // 补充 high-cardinality 维度
+        void recordException(Throwable t);           // 标记异常（success=false）
+        void end();                                   // 结束计时并提交
+    }
+}
+```
+
+新增埋点无需改动接口或引擎：只需在 `TransMetricsOperations` 增加常量，再经 `TransMetricsCollector.get().startSpan(...)` 发出即可。
 
 ## 与 MyBatis / JPA 集成
 
