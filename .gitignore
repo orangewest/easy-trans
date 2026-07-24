@@ -28,3 +28,7 @@ replay_pid*
 *target
 # 本地协作指令，不进仓库
 CODEBUDDY.md
+
+# 本地/生成目录，不进仓库
+.workbuddy/
+docs/
