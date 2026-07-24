@@ -218,10 +218,46 @@ new TransService().trans(user);
 
 ### 并行取数与查询合并
 
-`TransService` 有两个可调节的开关，用于在不同场景下平衡吞吐与上下文安全：
+`TransService` 有几个可调节的开关，用于在不同场景下平衡吞吐与上下文安全：
 
-- **`parallelRepoGroups`（默认 `true`）**：当对象包含 2 个以上仓库分组时，各组在虚拟线程上并行查询（`CompletableFuture.runAsync`）。并行会丢失调用线程的 `ThreadLocal` 上下文（JPA Session、Spring Security、MDC trace-id 等）。若你的 `getTransValueMap` 依赖这些上下文，请关闭并行：非 Spring 调 `setParallelRepoGroups(false)`；Spring 通过配置 `easy-trans.parallel-repo-groups=false`。
+- **`parallelRepoGroups`（默认 `true`）**：当对象包含 2 个以上仓库分组时，各组在虚拟线程上并行查询（`CompletableFuture.runAsync`）。并行会丢失调用线程的 `ThreadLocal` 上下文（JPA Session、Spring Security、MDC trace-id 等）。若你的 `getTransValueMap` 依赖这些上下文，有两种选择：① 关闭并行（非 Spring 调 `setParallelRepoGroups(false)`；Spring 配置 `easy-trans.parallel-repo-groups=false`）；② **保留并行、注册上下文传播器**把上下文带到虚拟线程（见下文[并行执行的上下文传播](#并行执行的上下文传播)）。
 - **`repoCoalescing`（默认 `true`）**：单次 `trans()` 调用内，对「同一仓库 + 同一 repoName + 同一注解属性 + 同一源字段类型」的查询做请求级去重，仅查缺失的键；累积表随调用结束即丢弃，**不是**跨调用缓存。它假设仓库在单次调用内对同一语义查询是幂等的；若不满足，请关闭合并：非 Spring 调 `setRepoCoalescing(false)`。
+- **`repoBatchSize`（默认 `500`）**：翻译大列表时，交给单次 `getTransValueMap` 的去重键可能非常多，易触碰后端上限（Oracle `IN` 1000、MySQL 包大小、RPC 批量条数上限等）。框架默认按 500 把键切分成多批、分批查询并合并结果，**仓库实现对分片完全无感**（无需自己写分片逻辑）。分片发生在请求级去重之后，只对真正要查的键切分；当切出多批且 `parallelRepoGroups` 开启时，各批在虚拟线程上**并行异步查询**（带上下文传播）。非 Spring 调 `setRepoBatchSize(500)`；Spring 配置 `easy-trans.repo-batch-size=500`；设为 `0`（或负数）关闭分片。
+
+### 并行执行的上下文传播
+
+开启 `parallelRepoGroups` 后，各仓库分组跑在虚拟线程上，**默认不继承**调用线程的 `ThreadLocal`。若仓库依赖 Spring Security 登录态、SLF4J MDC trace-id、JPA Session 等，注册一个或多个 `TransContextPropagator` 即可让「并行」与「上下文正确」兼得——无需再关闭并行。
+
+`TransContextPropagator` 是 `easy-trans-core` 的零依赖 SPI：`capture()` 在调用线程抓快照，`restore(snapshot)` 在虚拟线程恢复，`clear()` 任务结束清理。注册方式与 `TransRepository` / `TransValueResolver` 一致——经静态工厂 `TransContextPropagatorFactory.register(...)`；Spring 下标 `@Component` 即由 `EasyTransRegister` 自动注册。未注册任何传播器时行为与历史版本完全一致（`NOOP`，零开销）。注册多个时按注册顺序 `capture`/`restore`、逆序 `clear`，各传播器互不耦合。
+
+**无第三方依赖，自定义传播 Spring Security（仅依赖 `spring-security-core`）**：
+
+```java
+@Component   // Spring 下自动被收集并注入 TransService
+public class SecurityContextPropagator implements TransContextPropagator {
+    @Override public Object capture()  { return SecurityContextHolder.getContext(); }
+    @Override public void restore(Object s) { SecurityContextHolder.setContext((SecurityContext) s); }
+    @Override public void clear()      { SecurityContextHolder.clearContext(); }
+}
+```
+
+**再传 MDC，只需再声明一个 Bean**（各关注点独立，框架自动组合，不必手写大杂烩）：
+
+```java
+@Component
+public class MdcContextPropagator implements TransContextPropagator {
+    @Override public Object capture()  { return MDC.getCopyOfContextMap(); }
+    @Override public void restore(Object s) {
+        Map<String, String> map = (Map<String, String>) s;
+        if (map != null) MDC.setContextMap(map); else MDC.clear();
+    }
+    @Override public void clear()      { MDC.clear(); }
+}
+```
+
+非 Spring 环境用 `TransContextPropagatorFactory.register(new SecurityContextPropagator())` / `.register(new MdcContextPropagator())`（与 `TransRepositoryFactory.register(...)` 同一注册风格）。
+
+**Micrometer 自动桥接（可选便利）**：当 classpath 存在 Micrometer `context-propagation`（`io.micrometer:context-propagation`，在 `easy-trans-spring-start` 中为 optional 依赖）时，框架自动注册一个桥接传播器，**一把带走所有已注册 `ThreadLocalAccessor` 的上下文**（Security / MDC / Reactor 等）——此时通常无需再写自定义传播器。可用 `easy-trans.context-propagation.micrometer.enabled=false` 关闭自动桥接。
 
 ## 核心设计
 

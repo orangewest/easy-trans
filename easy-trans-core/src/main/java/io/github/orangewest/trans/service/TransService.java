@@ -10,6 +10,8 @@ import io.github.orangewest.trans.metrics.TransMetricContext;
 import io.github.orangewest.trans.metrics.TransMetrics;
 import io.github.orangewest.trans.metrics.TransMetricsCollector;
 import io.github.orangewest.trans.metrics.TransMetricsOperations;
+import io.github.orangewest.trans.propagation.TransContextPropagator;
+import io.github.orangewest.trans.propagation.TransContextPropagatorFactory;
 import io.github.orangewest.trans.repository.TransRepository;
 import io.github.orangewest.trans.repository.TransRepositoryFactory;
 import io.github.orangewest.trans.repository.DefaultTransContext;
@@ -63,12 +65,35 @@ public class TransService implements AutoCloseable {
      */
     private volatile boolean repoCoalescing = true;
 
+    /**
+     * Default {@link #setRepoBatchSize(int)} value (500): the framework splits repository queries into
+     * batches of at most this many keys out of the box, keeping them under common backend limits
+     * (Oracle {@code IN} 1000, MySQL packet size, RPC batch caps). Set to {@code 0} (or negative) to disable.
+     */
+    public static final int DEFAULT_REPO_BATCH_SIZE = 500;
+
+    /**
+     * Split a repository query into batches of at most this many keys (default {@link #DEFAULT_REPO_BATCH_SIZE}).
+     * <p>
+     * When translating a large list, the distinct keys handed to a single {@code getTransValueMap} call can be
+     * huge, which may exceed backend limits. The framework splits keys into chunks of this size, queries each
+     * chunk and merges the results — the repository stays unaware of chunking. When more than one chunk is
+     * produced and {@code parallelRepoGroups} is on, chunks are queried in parallel on virtual threads (with
+     * context propagation). Chunking is applied after request-scoped coalescing (P6), so only the keys actually
+     * queried are chunked. Set {@code <= 0} to disable splitting.
+     */
+    private volatile int repoBatchSize = DEFAULT_REPO_BATCH_SIZE;
+
     public void setParallelRepoGroups(boolean parallelRepoGroups) {
         this.parallelRepoGroups = parallelRepoGroups;
     }
 
     public void setRepoCoalescing(boolean repoCoalescing) {
         this.repoCoalescing = repoCoalescing;
+    }
+
+    public void setRepoBatchSize(int repoBatchSize) {
+        this.repoBatchSize = repoBatchSize;
     }
 
     public void setExecutor(ExecutorService executor) {
@@ -135,14 +160,20 @@ public class TransService implements AutoCloseable {
                 .collect(Collectors.groupingBy(TransFieldMeta::getTransRepoMeta));
         if (groups.size() > 1 && parallelRepoGroups) {
             List<Throwable> errors = Collections.synchronizedList(new ArrayList<>());
+            TransContextPropagator propagator = TransContextPropagatorFactory.get();
+            // 在调用线程抓取上下文快照，供各并行虚拟线程恢复（默认 NOOP，返回 null、无开销）
+            Object ctxSnapshot = propagator.capture();
             CompletableFuture.allOf(
                             groups.entrySet()
                                     .stream()
                                     .map(entry -> CompletableFuture.runAsync(() -> {
+                                        propagator.restore(ctxSnapshot);
                                         try {
                                             translateRepo(objList, entry.getKey(), entry.getValue(), call, parent);
                                         } catch (Throwable t) {
                                             errors.add(t);
+                                        } finally {
+                                            propagator.clear();
                                         }
                                     }, executor.get()))
                                     .toArray(CompletableFuture[]::new))
@@ -256,14 +287,78 @@ public class TransService implements AutoCloseable {
                 .build();
         TransMetrics.Span span = TransMetricsCollector.get().startSpan(TransMetricsOperations.REPOSITORY, ctx);
         try {
-            return transRepository.getTransValueMap(keys,
-                    new DefaultTransContext(transRepoMeta.getRepoName(), transRepoMeta.getAttributes(), sourceType));
+            DefaultTransContext context =
+                    new DefaultTransContext(transRepoMeta.getRepoName(), transRepoMeta.getAttributes(), sourceType);
+            int batchSize = repoBatchSize;
+            if (batchSize <= 0 || keys.size() <= batchSize) {
+                return transRepository.getTransValueMap(keys, context);
+            }
+            // 大列表分片：按 batchSize 切分，仓库实现对分片无感
+            List<List<Object>> chunks = new ArrayList<>();
+            for (int i = 0; i < keys.size(); i += batchSize) {
+                chunks.add(keys.subList(i, Math.min(i + batchSize, keys.size())));
+            }
+            // 多批时并行异步查询（受 parallelRepoGroups 约束、带上下文传播）；否则串行
+            return parallelRepoGroups
+                    ? queryChunksParallel(transRepository, context, chunks)
+                    : queryChunksSequential(transRepository, context, chunks);
         } catch (Throwable t) {
             span.recordException(t);
             throw t;
         } finally {
             span.end();
         }
+    }
+
+    /** 串行逐批查询并合并（parallelRepoGroups 关闭时，保持调用线程上下文）。 */
+    private static Map<Object, Object> queryChunksSequential(TransRepository<Object, Object> transRepository,
+                                                             DefaultTransContext context, List<List<Object>> chunks) {
+        Map<Object, Object> merged = new HashMap<>();
+        for (List<Object> chunk : chunks) {
+            Map<Object, Object> part = transRepository.getTransValueMap(chunk, context);
+            if (CollectionUtils.isNotEmpty(part)) {
+                merged.putAll(part);
+            }
+        }
+        return merged;
+    }
+
+    /** 并行异步逐批查询：各批跑在虚拟线程上、带上下文传播，失败聚合为复合异常，结果合并。 */
+    private Map<Object, Object> queryChunksParallel(TransRepository<Object, Object> transRepository,
+                                                    DefaultTransContext context, List<List<Object>> chunks) {
+        List<Map<Object, Object>> parts = Collections.synchronizedList(new ArrayList<>());
+        List<Throwable> errors = Collections.synchronizedList(new ArrayList<>());
+        TransContextPropagator propagator = TransContextPropagatorFactory.get();
+        Object ctxSnapshot = propagator.capture();
+        CompletableFuture.allOf(chunks.stream()
+                        .map(chunk -> CompletableFuture.runAsync(() -> {
+                            propagator.restore(ctxSnapshot);
+                            try {
+                                Map<Object, Object> part = transRepository.getTransValueMap(chunk, context);
+                                if (CollectionUtils.isNotEmpty(part)) {
+                                    parts.add(part);
+                                }
+                            } catch (Throwable t) {
+                                errors.add(t);
+                            } finally {
+                                propagator.clear();
+                            }
+                        }, executor.get()))
+                        .toArray(CompletableFuture[]::new))
+                .join();
+        if (!errors.isEmpty()) {
+            Throwable first = errors.getFirst();
+            String message = "Translation failed for " + errors.size() + " query batch(es): "
+                    + errors.stream().map(Throwable::getMessage).collect(Collectors.joining(" | "));
+            TransException aggregated = new TransException(message, first);
+            for (int i = 1; i < errors.size(); i++) {
+                aggregated.addSuppressed(errors.get(i));
+            }
+            throw aggregated;
+        }
+        Map<Object, Object> merged = new HashMap<>();
+        parts.forEach(merged::putAll);
+        return merged;
     }
 
     private List<TransModel> toNeedTransList(List<Object> objList, List<TransFieldMeta> toTransList) {

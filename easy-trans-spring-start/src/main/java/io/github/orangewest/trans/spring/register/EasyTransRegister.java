@@ -4,6 +4,8 @@ import io.github.orangewest.trans.resolver.TransValueResolver;
 import io.github.orangewest.trans.resolver.TransValueResolverFactory;
 import io.github.orangewest.trans.metrics.TransMetrics;
 import io.github.orangewest.trans.metrics.TransMetricsCollector;
+import io.github.orangewest.trans.propagation.TransContextPropagator;
+import io.github.orangewest.trans.propagation.TransContextPropagatorFactory;
 import io.github.orangewest.trans.repository.TransRepository;
 import io.github.orangewest.trans.repository.TransRepositoryFactory;
 import org.jspecify.annotations.NonNull;
@@ -22,6 +24,9 @@ public class EasyTransRegister implements BeanPostProcessor {
             case TransMetrics transMetrics ->
                 // 用户自定义 TransMetrics 后端经 Spring 容器自动注册，无需手动 TransMetricsCollector.set(...)
                 TransMetricsCollector.set(transMetrics);
+            case TransContextPropagator propagator ->
+                // 上下文传播器经 Spring 容器自动注册进静态工厂，供并行取数时恢复调用线程上下文
+                TransContextPropagatorFactory.register(propagator);
             default -> {
             }
         }

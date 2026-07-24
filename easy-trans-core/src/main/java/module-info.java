@@ -20,6 +20,7 @@ open module io.github.orangewest.trans {
     exports io.github.orangewest.trans.repository.dict;
     exports io.github.orangewest.trans.resolver;
     exports io.github.orangewest.trans.service;
+    exports io.github.orangewest.trans.propagation;
     exports io.github.orangewest.trans.metrics;
     exports io.github.orangewest.trans.exception;
 }
