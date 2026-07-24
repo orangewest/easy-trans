@@ -127,7 +127,7 @@ easy-trans 有两条并行的版本线：
 
 | 版本线 | JDK | Spring Boot | 适用场景 |
 | --- | --- | --- | --- |
-| **2.x**（主线，当前 2.0.0） | JDK 25（构建需 JDK 25，运行需 JRE 25+） | Spring Boot 4.x（已验证 4.1.0） | 可升级 JDK 与 Spring 的新项目 |
+| **2.x**（主线，当前 2.0.1） | JDK 25（构建需 JDK 25，运行需 JRE 25+） | Spring Boot 4.x（已验证 4.1.0） | 可升级 JDK 与 Spring 的新项目 |
 | **1.x**（维护线） | JDK 8+ | Spring Boot 2.7.x | 仍停留在 JDK 8 / Spring Boot 2.7 的项目 |
 
 - 主线 2.x 要求 **JDK 25 + Spring Boot 4**；若项目停留在 JDK 8 或 Spring Boot 2.7，请使用 1.x。
@@ -144,7 +144,7 @@ easy-trans 有两条并行的版本线：
 <dependency>
     <groupId>io.github.orangewest</groupId>
     <artifactId>easy-trans-spring-start</artifactId>
-    <version>2.0.0</version>
+    <version>2.0.1</version>
 </dependency>
 ```
 
@@ -154,7 +154,7 @@ easy-trans 有两条并行的版本线：
 <dependency>
     <groupId>io.github.orangewest</groupId>
     <artifactId>easy-trans-core</artifactId>
-    <version>2.0.0</version>
+    <version>2.0.1</version>
 </dependency>
 ```
 
@@ -510,7 +510,7 @@ private String teacherName;
 <dependency>
     <groupId>io.github.orangewest</groupId>
     <artifactId>easy-trans-spring-start</artifactId>
-    <version>2.0.0</version>
+    <version>2.0.1</version>
 </dependency>
 ```
 
